@@ -1,0 +1,16 @@
+{
+  "name": "mindmap-radial",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Application de mind map responsive avec import Markdown et réorganisation radiale intelligente.",
+  "type": "module",
+  "scripts": {
+    "start": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "vite": "latest"
+  },
+  "devDependencies": {}
+}
