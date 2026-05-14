@@ -31,6 +31,7 @@ app.innerHTML = `
           <label for="file-input" class="file-button">Importer</label>
           <button id="create-map-button" type="button">Créer</button>
           <button id="save-map-button" type="button">Enregistrer la carte</button>
+          <button id="save-template-button" type="button" hidden>Enregistrer le modèle</button>
         </div>
         <details class="saved-panel template-section" aria-label="Modèles de cartes">
           <summary class="saved-header">
@@ -47,7 +48,7 @@ app.innerHTML = `
           <div id="saved-maps-list" class="saved-list"></div>
         </details>
         <details class="source-details">
-          <summary>Voir / modifier la source Markdown</summary>
+          <summary>Modifier le texte brut</summary>
           <textarea id="markdown-input" spellcheck="false"></textarea>
           <button id="render-button" type="button">Mettre à jour la carte</button>
         </details>
@@ -81,19 +82,6 @@ app.innerHTML = `
             <button id="center-button" type="button" aria-label="Recentrer sur le nœud central" title="Recentrer sur le nœud central">Recentrer</button>
           </div>
         </div>
-        <div class="edit-bar" aria-label="Édition du nœud sélectionné">
-          <div>
-            <span>Nœud sélectionné</span>
-            <button id="selected-node-label" class="selected-node-label" type="button" aria-label="Renommer le nœud sélectionné" title="Renommer le nœud sélectionné">Sujet central</button>
-            <input id="selected-node-title-input" class="selected-node-title-input" type="text" aria-label="Nouveau nom du nœud sélectionné" hidden />
-          </div>
-          <div class="edit-actions">
-            <input id="new-node-title" type="text" placeholder="Titre du nouveau nœud" />
-            <button id="add-child-button" type="button">+ enfant</button>
-            <button id="add-sibling-button" type="button">+ frère</button>
-            <button id="delete-node-button" type="button" class="danger">Supprimer</button>
-          </div>
-        </div>
         <div id="map-viewport" class="canvas-wrap">
           <svg id="mindmap" role="img" aria-labelledby="map-title" viewBox="0 0 1200 800"></svg>
           <button id="map-fullscreen-button" class="map-fullscreen-button" type="button" aria-label="Afficher la carte en plein écran" title="Plein écran">⛶</button>
@@ -113,7 +101,14 @@ app.innerHTML = `
     <div id="node-action-menu" class="node-action-menu" hidden>
       <button type="button" data-node-action="child">+ enfant</button>
       <button type="button" data-node-action="sibling">+ frère</button>
+      <button type="button" data-node-action="rename">Renommer</button>
       <button type="button" data-node-action="delete" class="danger">Supprimer</button>
+    </div>
+    <div id="map-action-menu" class="node-action-menu map-action-menu" hidden>
+      <button type="button" data-map-action="edit">Modifier</button>
+      <button type="button" data-map-action="template">Transformer en modèle</button>
+      <button type="button" data-map-action="archive">Archiver</button>
+      <button type="button" data-map-action="delete" class="danger">Supprimer</button>
     </div>
   </main>
 `;
@@ -126,6 +121,7 @@ const createMapTitle = document.querySelector('#create-map-title');
 const cancelCreateMap = document.querySelector('#cancel-create-map');
 const confirmCreateMap = document.querySelector('#confirm-create-map');
 const saveMapButton = document.querySelector('#save-map-button');
+const saveTemplateButton = document.querySelector('#save-template-button');
 const activeMapName = document.querySelector('#active-map-name');
 const templateCount = document.querySelector('#template-count');
 const templateMapsList = document.querySelector('#template-maps-list');
@@ -137,6 +133,7 @@ const renderButton = document.querySelector('#render-button');
 const mapViewport = document.querySelector('#map-viewport');
 const mapFullscreenButton = document.querySelector('#map-fullscreen-button');
 const nodeActionMenu = document.querySelector('#node-action-menu');
+const mapActionMenu = document.querySelector('#map-action-menu');
 const svg = document.querySelector('#mindmap');
 const nodeCount = document.querySelector('#node-count');
 const mapTitle = document.querySelector('#map-title');
@@ -150,12 +147,6 @@ const zoomInButton = document.querySelector('#zoom-in-button');
 const fitButton = document.querySelector('#fit-button');
 const centerButton = document.querySelector('#center-button');
 const zoomLevel = document.querySelector('#zoom-level');
-const selectedNodeLabel = document.querySelector('#selected-node-label');
-const selectedNodeTitleInput = document.querySelector('#selected-node-title-input');
-const newNodeTitle = document.querySelector('#new-node-title');
-const addChildButton = document.querySelector('#add-child-button');
-const addSiblingButton = document.querySelector('#add-sibling-button');
-const deleteNodeButton = document.querySelector('#delete-node-button');
 
 markdownInput.value = SAMPLE_MARKDOWN;
 let sourceTree = parseMarkdownToTree(markdownInput.value);
@@ -176,6 +167,10 @@ let suppressNextNodeClick = false;
 let nodeLongPressTimeout = null;
 let nodeLongPressStart = null;
 let nodeActionMenuNodeId = null;
+let mapLongPressTimeout = null;
+let mapLongPressStart = null;
+let mapActionMenuContext = null;
+let suppressNextMapClick = false;
 const activePointers = new Map();
 let pinchStart = null;
 
@@ -252,11 +247,12 @@ let savedMaps = [];
 let remoteStorageAvailable = false;
 let activeMapId = null;
 let activeMapLabel = 'Exemple intégré';
+let activeTemplateEdit = null;
 let searchMatches = [];
 let activeSearchIndex = -1;
 
 renderButton.addEventListener('click', () => {
-  loadMarkdown(markdownInput.value, activeMapLabel, { id: activeMapId });
+  loadMarkdown(markdownInput.value, activeMapLabel, { id: activeMapId, templateEdit: activeTemplateEdit });
 });
 
 fileInput.addEventListener('change', async () => {
@@ -283,15 +279,14 @@ confirmCreateMap.addEventListener('click', (event) => {
   createMapDialog.close();
 });
 saveMapButton.addEventListener('click', saveCurrentMap);
+saveTemplateButton.addEventListener('click', saveCurrentTemplate);
 templateMapsList.addEventListener('click', (event) => {
-  const removeButton = event.target.closest('button[data-remove-template-map-id]');
-  if (removeButton) {
-    removeSavedMapTemplate(removeButton.dataset.removeTemplateMapId);
-    return;
-  }
-
   const button = event.target.closest('button[data-template-id]');
   if (!button || !templateMapsList.contains(button)) return;
+  if (suppressNextMapClick) {
+    suppressNextMapClick = false;
+    return;
+  }
 
   const template = findTemplate(button.dataset.templateId);
   if (!template) return;
@@ -299,20 +294,12 @@ templateMapsList.addEventListener('click', (event) => {
   loadMarkdown(template.markdown, template.name);
 });
 savedMapsList.addEventListener('click', (event) => {
-  const templateButton = event.target.closest('button[data-template-map-id]');
-  if (templateButton) {
-    markSavedMapAsTemplate(templateButton.dataset.templateMapId);
-    return;
-  }
-
-  const archiveButton = event.target.closest('button[data-archive-map-id]');
-  if (archiveButton) {
-    archiveSavedMap(archiveButton.dataset.archiveMapId);
-    return;
-  }
-
   const button = event.target.closest('button[data-map-id]');
   if (!button || !savedMapsList.contains(button)) return;
+  if (suppressNextMapClick) {
+    suppressNextMapClick = false;
+    return;
+  }
 
   const saved = savedMaps.find((map) => map.id === button.dataset.mapId);
   if (!saved) return;
@@ -320,14 +307,12 @@ savedMapsList.addEventListener('click', (event) => {
   loadMarkdown(saved.markdown, saved.name, { id: saved.id });
 });
 archivedMapsList.addEventListener('click', (event) => {
-  const deleteButton = event.target.closest('button[data-delete-map-id]');
-  if (deleteButton) {
-    deleteArchivedMap(deleteButton.dataset.deleteMapId);
-    return;
-  }
-
   const button = event.target.closest('button[data-map-id]');
   if (!button || !archivedMapsList.contains(button)) return;
+  if (suppressNextMapClick) {
+    suppressNextMapClick = false;
+    return;
+  }
 
   const saved = savedMaps.find((map) => map.id === button.dataset.mapId);
   if (!saved) return;
@@ -349,32 +334,11 @@ nodeSearch.addEventListener('keydown', (event) => {
   event.preventDefault();
   moveSearch(event.shiftKey ? -1 : 1);
 });
-selectedNodeLabel.addEventListener('click', startRenamingSelectedNode);
-selectedNodeTitleInput.addEventListener('keydown', (event) => {
-  if (event.key === 'Enter') {
-    event.preventDefault();
-    commitSelectedNodeRename();
-  }
-  if (event.key === 'Escape') {
-    event.preventDefault();
-    cancelSelectedNodeRename();
-  }
-});
-selectedNodeTitleInput.addEventListener('blur', commitSelectedNodeRename);
 markdownInput.addEventListener('input', debounce(() => {
   sourceTree = parseMarkdownToTree(markdownInput.value);
   resetInteractionState();
   render(currentLayout);
 }, 450));
-addChildButton.addEventListener('click', () => {
-  addChildToSelectedNode();
-});
-addSiblingButton.addEventListener('click', () => {
-  addSiblingToSelectedNode();
-});
-deleteNodeButton.addEventListener('click', () => {
-  deleteSelectedNode();
-});
 
 function addChildToSelectedNode() {
   const parent = findNode(sourceTree, selectedNodeId);
@@ -385,7 +349,6 @@ function addChildToSelectedNode() {
   const child = addChildNode(sourceTree, parent.id, title);
   selectedNodeId = child.id;
   expandedIds.add(parent.id);
-  newNodeTitle.value = '';
   syncMarkdownFromTree();
   render(currentLayout);
 }
@@ -400,7 +363,6 @@ function addSiblingToSelectedNode() {
   selectedNodeId = sibling.id;
   const parent = findParent(sourceTree, sibling.id);
   if (parent) expandedIds.add(parent.id);
-  newNodeTitle.value = '';
   syncMarkdownFromTree();
   render(currentLayout);
 }
@@ -418,50 +380,26 @@ function deleteSelectedNode() {
 }
 
 function requestNodeTitle() {
-  const defaultTitle = cleanTitle(newNodeTitle.value) || 'Nouveau nœud';
-  const title = globalThis.prompt('Nom du nœud', defaultTitle);
+  const title = globalThis.prompt('Nom du nœud', '');
   if (title === null) return null;
-  return cleanTitle(title) || defaultTitle;
+  return cleanTitle(title);
 }
 
-function startRenamingSelectedNode() {
+function renameSelectedNode() {
   const selected = findNode(sourceTree, selectedNodeId);
   if (!selected) return;
+  const title = globalThis.prompt('Nouveau nom du nœud', selected.title);
+  if (title === null) return;
+  const clean = cleanTitle(title);
+  if (!clean || clean === selected.title) return;
 
-  selectedNodeTitleInput.value = selected.title;
-  selectedNodeLabel.hidden = true;
-  selectedNodeTitleInput.hidden = false;
-  selectedNodeTitleInput.focus();
-  selectedNodeTitleInput.select();
-}
-
-function commitSelectedNodeRename() {
-  if (selectedNodeTitleInput.hidden) return;
-
-  const selected = findNode(sourceTree, selectedNodeId);
-  const title = cleanTitle(selectedNodeTitleInput.value);
-  selectedNodeTitleInput.hidden = true;
-  selectedNodeLabel.hidden = false;
-
-  if (!selected || !title || title === selected.title) {
-    renderSelectionState();
-    return;
-  }
-
-  selected.title = title;
+  selected.title = clean;
   if (selected.depth === 0) {
-    activeMapLabel = title;
-    activeMapName.textContent = title;
+    activeMapLabel = clean;
+    activeMapName.textContent = clean;
   }
   syncMarkdownFromTree();
   render(currentLayout);
-}
-
-function cancelSelectedNodeRename() {
-  selectedNodeTitleInput.hidden = true;
-  selectedNodeLabel.hidden = false;
-  renderSelectionState();
-  selectedNodeLabel.focus();
 }
 
 function handleGlobalKeydown(event) {
@@ -472,7 +410,7 @@ function handleGlobalKeydown(event) {
   }
 
   if (event.key !== 'Enter' || !event.metaKey || event.isComposing) return;
-  if (isEditingText(event.target) && event.target !== newNodeTitle) return;
+  if (isEditingText(event.target)) return;
 
   event.preventDefault();
   if (event.shiftKey) {
@@ -561,27 +499,23 @@ function handleNodeActionMenuClick(event) {
   if (button.dataset.nodeAction === 'sibling') {
     addSiblingToSelectedNode();
   }
+  if (button.dataset.nodeAction === 'rename') {
+    renameSelectedNode();
+  }
   if (button.dataset.nodeAction === 'delete') {
     deleteSelectedNode();
   }
 }
 
 function showNodeActionMenu(node, clientX, clientY) {
+  hideMapActionMenu();
   selectedNodeId = node.id;
   renderSelectionState();
   nodeActionMenuNodeId = node.id;
   nodeActionMenu.querySelector('[data-node-action="sibling"]').disabled = node.depth === 0;
   nodeActionMenu.querySelector('[data-node-action="delete"]').disabled = node.depth === 0;
   nodeActionMenu.hidden = false;
-
-  const menuRect = nodeActionMenu.getBoundingClientRect();
-  const viewport = visibleViewportBounds();
-  const maxX = Math.max(viewport.left + 8, viewport.left + viewport.width - menuRect.width - 8);
-  const maxY = Math.max(viewport.top + 8, viewport.top + viewport.height - menuRect.height - 8);
-  const x = clamp(clientX, viewport.left + 8, maxX);
-  const y = clamp(clientY, viewport.top + 8, maxY);
-  nodeActionMenu.style.left = `${x}px`;
-  nodeActionMenu.style.top = `${y}px`;
+  positionFloatingMenu(nodeActionMenu, clientX, clientY);
 }
 
 function hideNodeActionMenu() {
@@ -625,6 +559,17 @@ function visibleViewportBounds() {
   };
 }
 
+function positionFloatingMenu(menu, clientX, clientY) {
+  const menuRect = menu.getBoundingClientRect();
+  const viewport = visibleViewportBounds();
+  const maxX = Math.max(viewport.left + 8, viewport.left + viewport.width - menuRect.width - 8);
+  const maxY = Math.max(viewport.top + 8, viewport.top + viewport.height - menuRect.height - 8);
+  const x = clamp(clientX, viewport.left + 8, maxX);
+  const y = clamp(clientY, viewport.top + 8, maxY);
+  menu.style.left = `${x}px`;
+  menu.style.top = `${y}px`;
+}
+
 zoomOutButton.addEventListener('click', () => {
   autoFit = false;
   zoomAtViewportPoint(viewportSize.width / 2, viewportSize.height / 2, 1 / 1.22);
@@ -643,6 +588,7 @@ centerButton.addEventListener('click', () => {
 });
 mapFullscreenButton.addEventListener('click', toggleMapFullscreen);
 nodeActionMenu.addEventListener('click', handleNodeActionMenuClick);
+mapActionMenu.addEventListener('click', handleMapActionMenuClick);
 
 mapViewport.addEventListener('wheel', handleWheel, { passive: false });
 mapViewport.addEventListener('pointerdown', handlePointerDown);
@@ -657,11 +603,12 @@ mapViewport.addEventListener('dblclick', (event) => {
 mapViewport.addEventListener('click', () => {
   suppressNextNodeClick = false;
   hideNodeActionMenu();
+  hideMapActionMenu();
 });
 window.addEventListener('keydown', handleGlobalKeydown);
 window.addEventListener('pointerdown', (event) => {
-  if (nodeActionMenu.hidden || nodeActionMenu.contains(event.target)) return;
-  hideNodeActionMenu();
+  if (!nodeActionMenu.hidden && !nodeActionMenu.contains(event.target)) hideNodeActionMenu();
+  if (!mapActionMenu.hidden && !mapActionMenu.contains(event.target)) hideMapActionMenu();
 });
 document.addEventListener('fullscreenchange', updateMapFullscreenState);
 
@@ -688,6 +635,7 @@ function loadMarkdown(markdown, name, options = {}) {
   activeMapId = options.id ?? null;
   activeMapLabel = name || sourceTree.title;
   activeMapName.textContent = activeMapLabel;
+  setTemplateEditMode(options.templateEdit ?? null);
   resetInteractionState();
   resetSearch();
   autoFit = true;
@@ -721,12 +669,52 @@ async function saveCurrentMap() {
   renderSavedMaps();
 }
 
+async function saveCurrentTemplate() {
+  const now = new Date().toISOString();
+  const title = sourceTree.title || activeMapLabel || 'Modèle sans titre';
+  const isExistingCustomTemplate = activeTemplateEdit?.source === 'custom' && activeMapId;
+  const existingIndex = isExistingCustomTemplate
+    ? savedMaps.findIndex((map) => map.id === activeMapId)
+    : -1;
+  const savedTemplate = {
+    id: existingIndex >= 0 ? savedMaps[existingIndex].id : createSavedMapId(),
+    name: title,
+    markdown: markdownInput.value,
+    archivedAt: existingIndex >= 0 ? (savedMaps[existingIndex].archivedAt ?? null) : null,
+    templateAt: existingIndex >= 0 ? (savedMaps[existingIndex].templateAt ?? now) : now,
+    updatedAt: now,
+  };
+
+  if (existingIndex >= 0) {
+    savedMaps[existingIndex] = savedTemplate;
+  } else {
+    savedMaps.unshift(savedTemplate);
+  }
+
+  activeMapId = savedTemplate.id;
+  activeMapLabel = savedTemplate.name;
+  activeMapName.textContent = activeMapLabel;
+  setTemplateEditMode({ id: savedTemplate.id, source: 'custom' });
+  await persistSavedMaps(savedTemplate);
+  renderSavedMaps();
+}
+
+function setTemplateEditMode(templateEdit) {
+  activeTemplateEdit = templateEdit;
+  saveTemplateButton.hidden = !activeTemplateEdit;
+}
+
 function renderSavedMaps() {
   const activeMaps = savedMaps.filter((map) => !map.archivedAt);
   const archivedMaps = savedMaps.filter((map) => map.archivedAt);
+  const archivedBuiltInTemplateIds = new Set(
+    savedMaps
+      .filter((map) => isBuiltInTemplateId(map.id) && map.archivedAt)
+      .map((map) => map.id),
+  );
   const templates = [
-    ...BUILT_IN_TEMPLATES,
-    ...savedMaps.filter((map) => map.templateAt),
+    ...BUILT_IN_TEMPLATES.filter((template) => !archivedBuiltInTemplateIds.has(template.id)),
+    ...savedMaps.filter((map) => map.templateAt && !map.archivedAt),
   ];
 
   templateCount.textContent = `${templates.length}`;
@@ -775,19 +763,11 @@ function renderTemplateRow(template) {
     <span>${escapeHtml(template.name)}</span>
     <small>${escapeHtml(template.description ?? 'Modèle personnalisé')}</small>
   `;
+  bindMapContextMenu(button, {
+    id: template.id,
+    type: template.id.startsWith('builtin-') ? 'builtin-template' : 'custom-template',
+  });
   row.append(button);
-
-  if (!template.id.startsWith('builtin-')) {
-    const actions = document.createElement('div');
-    actions.className = 'map-actions';
-    const removeButton = document.createElement('button');
-    removeButton.type = 'button';
-    removeButton.className = 'map-action-button';
-    removeButton.dataset.removeTemplateMapId = template.id;
-    removeButton.textContent = 'Retirer';
-    actions.append(removeButton);
-    row.append(actions);
-  }
 
   return row;
 }
@@ -804,40 +784,14 @@ function renderMapRow(map, options = {}) {
     <span>${escapeHtml(map.name)}</span>
     <small>${formatSavedDate(map.updatedAt)}</small>
   `;
+  const contextType = options.action === 'delete'
+    ? (isBuiltInTemplateId(map.id) ? 'archived-builtin-template' : 'archived-map')
+    : 'saved-map';
+  bindMapContextMenu(button, {
+    id: map.id,
+    type: contextType,
+  });
   row.append(button);
-
-  if (options.action === 'saved') {
-    const actions = document.createElement('div');
-    actions.className = 'map-actions';
-    if (!map.templateAt) {
-      const templateButton = document.createElement('button');
-      templateButton.type = 'button';
-      templateButton.className = 'map-action-button';
-      templateButton.dataset.templateMapId = map.id;
-      templateButton.textContent = 'Modèle';
-      actions.append(templateButton);
-    }
-
-    const archiveButton = document.createElement('button');
-    archiveButton.type = 'button';
-    archiveButton.className = 'map-action-button';
-    archiveButton.dataset.archiveMapId = map.id;
-    archiveButton.textContent = 'Archiver';
-    actions.append(archiveButton);
-    row.append(actions);
-  }
-
-  if (options.action === 'delete') {
-    const actions = document.createElement('div');
-    actions.className = 'map-actions';
-    const deleteButton = document.createElement('button');
-    deleteButton.type = 'button';
-    deleteButton.className = 'map-action-button danger compact';
-    deleteButton.dataset.deleteMapId = map.id;
-    deleteButton.textContent = 'Supprimer';
-    actions.append(deleteButton);
-    row.append(actions);
-  }
 
   return row;
 }
@@ -845,6 +799,125 @@ function renderMapRow(map, options = {}) {
 function findTemplate(templateId) {
   return BUILT_IN_TEMPLATES.find((template) => template.id === templateId)
     ?? savedMaps.find((map) => map.id === templateId && map.templateAt);
+}
+
+function bindMapContextMenu(element, context) {
+  element.addEventListener('contextmenu', (event) => {
+    event.preventDefault();
+    showMapActionMenu(context, event.clientX, event.clientY);
+  });
+  element.addEventListener('pointerdown', (event) => {
+    scheduleMapLongPress(event, context);
+  });
+  element.addEventListener('pointermove', handleMapLongPressMove);
+  element.addEventListener('pointerup', clearMapLongPress);
+  element.addEventListener('pointercancel', clearMapLongPress);
+}
+
+function handleMapActionMenuClick(event) {
+  const button = event.target.closest('button[data-map-action]');
+  if (!button || !mapActionMenuContext) return;
+  const { id, type } = mapActionMenuContext;
+  hideMapActionMenu();
+
+  if (button.dataset.mapAction === 'edit') {
+    editMapContext(type, id);
+  }
+  if (button.dataset.mapAction === 'template') {
+    markSavedMapAsTemplate(id);
+  }
+  if (button.dataset.mapAction === 'archive') {
+    if (type === 'builtin-template') {
+      archiveBuiltInTemplate(id);
+    } else {
+      archiveSavedMap(id);
+    }
+  }
+  if (button.dataset.mapAction === 'delete') {
+    removeMapContext(type, id);
+  }
+}
+
+function editMapContext(type, id) {
+  if (type === 'builtin-template') {
+    const template = findTemplate(id);
+    if (template) {
+      loadMarkdown(template.markdown, template.name, {
+        templateEdit: { id: template.id, source: 'builtin' },
+      });
+    }
+    return;
+  }
+
+  const map = savedMaps.find((savedMap) => savedMap.id === id);
+  if (map) {
+    loadMarkdown(map.markdown, map.name, {
+      id: map.id,
+      templateEdit: type === 'custom-template' ? { id: map.id, source: 'custom' } : null,
+    });
+  }
+}
+
+function removeMapContext(type, id) {
+  if (type === 'custom-template') {
+    removeSavedMapTemplate(id);
+  }
+  if (type === 'archived-map') {
+    deleteArchivedMap(id);
+  }
+}
+
+function showMapActionMenu(context, clientX, clientY) {
+  mapActionMenuContext = context;
+  const map = savedMaps.find((savedMap) => savedMap.id === context.id);
+  const isBuiltInTemplate = context.type === 'builtin-template';
+  const isSavedMap = context.type === 'saved-map';
+  const isCustomTemplate = context.type === 'custom-template';
+  const isArchivedMap = context.type === 'archived-map';
+
+  setMapActionVisibility('edit', true);
+  setMapActionVisibility('template', isSavedMap && !map?.templateAt);
+  setMapActionVisibility('archive', isSavedMap || isBuiltInTemplate);
+  setMapActionVisibility('delete', isCustomTemplate || isArchivedMap);
+  mapActionMenu.querySelector('[data-map-action="delete"]').textContent = isCustomTemplate ? 'Retirer' : 'Supprimer';
+
+  mapActionMenu.hidden = false;
+  positionFloatingMenu(mapActionMenu, clientX, clientY);
+}
+
+function setMapActionVisibility(action, visible) {
+  mapActionMenu.querySelector(`[data-map-action="${action}"]`).hidden = !visible;
+}
+
+function hideMapActionMenu() {
+  clearMapLongPress();
+  mapActionMenu.hidden = true;
+  mapActionMenuContext = null;
+}
+
+function scheduleMapLongPress(event, context) {
+  clearMapLongPress();
+  if (event.pointerType === 'mouse') return;
+  const { clientX, clientY } = event;
+  mapLongPressStart = { x: clientX, y: clientY };
+  mapLongPressTimeout = window.setTimeout(() => {
+    mapLongPressTimeout = null;
+    mapLongPressStart = null;
+    suppressNextMapClick = true;
+    showMapActionMenu(context, clientX, clientY);
+  }, 560);
+}
+
+function handleMapLongPressMove(event) {
+  if (!mapLongPressStart) return;
+  const distanceFromStart = Math.hypot(event.clientX - mapLongPressStart.x, event.clientY - mapLongPressStart.y);
+  if (distanceFromStart > 10) clearMapLongPress();
+}
+
+function clearMapLongPress() {
+  if (mapLongPressTimeout) window.clearTimeout(mapLongPressTimeout);
+  mapLongPressTimeout = null;
+  mapLongPressStart = null;
 }
 
 async function markSavedMapAsTemplate(mapId) {
@@ -869,6 +942,7 @@ async function removeSavedMapTemplate(mapId) {
     templateAt: null,
   };
   savedMaps[index] = templateMap;
+  if (activeTemplateEdit?.id === mapId) setTemplateEditMode(null);
   await persistSavedMaps(templateMap);
   renderSavedMaps();
 }
@@ -884,7 +958,33 @@ async function archiveSavedMap(mapId) {
   };
   savedMaps[index] = archivedMap;
   if (activeMapId === mapId) activeMapId = null;
+  if (activeTemplateEdit?.id === mapId) setTemplateEditMode(null);
   await persistSavedMaps(archivedMap);
+  renderSavedMaps();
+}
+
+async function archiveBuiltInTemplate(templateId) {
+  const template = BUILT_IN_TEMPLATES.find((builtInTemplate) => builtInTemplate.id === templateId);
+  if (!template) return;
+
+  const now = new Date().toISOString();
+  const archivedTemplate = {
+    id: template.id,
+    name: template.name,
+    markdown: template.markdown,
+    archivedAt: now,
+    templateAt: null,
+    updatedAt: now,
+  };
+  const index = savedMaps.findIndex((map) => map.id === template.id);
+  if (index >= 0) {
+    savedMaps[index] = archivedTemplate;
+  } else {
+    savedMaps.unshift(archivedTemplate);
+  }
+  if (activeTemplateEdit?.id === template.id) setTemplateEditMode(null);
+  if (activeMapId === template.id) activeMapId = null;
+  await persistSavedMaps(archivedTemplate);
   renderSavedMaps();
 }
 
@@ -894,6 +994,7 @@ async function deleteArchivedMap(mapId) {
 
   savedMaps = savedMaps.filter((savedMap) => savedMap.id !== mapId);
   if (activeMapId === mapId) activeMapId = null;
+  if (activeTemplateEdit?.id === mapId) setTemplateEditMode(null);
   await removePersistedMap(mapId);
   renderSavedMaps();
 }
@@ -1288,9 +1389,6 @@ function clamp(value, min, max) {
 function renderSelectionState() {
   const selected = findNode(sourceTree, selectedNodeId) ?? sourceTree;
   selectedNodeId = selected.id;
-  selectedNodeLabel.textContent = selected.title;
-  addSiblingButton.disabled = selected.depth === 0;
-  deleteNodeButton.disabled = selected.depth === 0;
 }
 
 function resetInteractionState() {
@@ -1395,6 +1493,10 @@ function normalizeSavedMap(map) {
 
 function createSavedMapId() {
   return globalThis.crypto?.randomUUID?.() ?? `map-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function isBuiltInTemplateId(id) {
+  return BUILT_IN_TEMPLATES.some((template) => template.id === id);
 }
 
 function formatSavedDate(value) {
