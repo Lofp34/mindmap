@@ -14,10 +14,32 @@ Prototype d’application de mind map orientée Markdown. L’objectif est de tr
 
 ```bash
 npm install
-npm run start
+npm run dev
 npm test
 npm run build
 ```
+
+## Déploiement Vercel
+
+Le projet est configuré pour Vercel avec `vercel.json` :
+
+- Framework : Vite
+- Install command : `npm ci`
+- Build command : `npm run build`
+- Output directory : `dist`
+- Node.js : `24.x`
+
+Déploiement en preview depuis ce dossier :
+
+```bash
+npm ci
+npm test
+npm run build
+vercel link --project mindmap-radial
+vercel deploy . -y
+```
+
+Si vous importez le dépôt depuis l’interface Vercel, gardez les réglages détectés par le projet : framework Vite, build `npm run build`, sortie `dist`.
 
 ## Architecture
 

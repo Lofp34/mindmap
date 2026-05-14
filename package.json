@@ -4,13 +4,17 @@
   "private": true,
   "description": "Application de mind map responsive avec import Markdown et réorganisation radiale intelligente.",
   "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
+    "dev": "vite --host 0.0.0.0",
     "start": "vite --host 0.0.0.0",
     "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
     "test": "node --test"
   },
-  "dependencies": {
-    "vite": "latest"
-  },
-  "devDependencies": {}
+  "devDependencies": {
+    "vite": "^8.0.12"
+  }
 }
