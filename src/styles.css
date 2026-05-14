@@ -127,7 +127,7 @@ label {
 
 .saved-panel {
   display: grid;
-  min-height: 120px;
+  min-height: 0;
   gap: 0.55rem;
   padding: 0.85rem;
   border: 1px solid rgba(148, 163, 184, 0.18);
@@ -140,13 +140,32 @@ label {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.saved-header::-webkit-details-marker {
+  display: none;
+}
+
+.saved-header::before {
+  content: "▸";
+  color: #94a3b8;
+  font-size: 0.8rem;
+  transition: transform 160ms ease;
+}
+
+.saved-panel[open] .saved-header::before {
+  transform: rotate(90deg);
 }
 
 .saved-header strong {
+  flex: 1;
   font-size: 0.9rem;
 }
 
-#saved-count {
+#saved-count,
+#archived-count {
   display: grid;
   min-width: 1.7rem;
   height: 1.7rem;
@@ -166,16 +185,26 @@ label {
   padding-right: 0.2rem;
 }
 
-.saved-map {
+.saved-map-row {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.45rem;
+  align-items: stretch;
+}
+
+.saved-map {
+  display: block;
   min-height: 52px;
-  justify-items: start;
-  gap: 0.12rem;
   border: 1px solid rgba(148, 163, 184, 0.16);
   border-radius: 14px;
   padding: 0.55rem 0.7rem;
   background: rgba(15, 23, 42, 0.74);
   text-align: left;
+}
+
+.saved-map:hover,
+.map-action-button:hover {
+  transform: none;
 }
 
 .saved-map.active {
@@ -184,6 +213,7 @@ label {
 }
 
 .saved-map span {
+  display: block;
   overflow: hidden;
   width: 100%;
   text-overflow: ellipsis;
@@ -198,6 +228,30 @@ label {
 
 .saved-empty {
   margin: 0;
+}
+
+.map-action-button {
+  min-height: 52px;
+  border-radius: 14px;
+  padding: 0 0.62rem;
+  background: rgba(29, 42, 68, 0.72);
+  color: #cbd5e1;
+  font-size: 0.76rem;
+}
+
+.map-action-button.danger {
+  border: 1px solid rgba(248, 113, 113, 0.32);
+  background: rgba(127, 29, 29, 0.24);
+  color: #fecaca;
+}
+
+.archive-section {
+  margin-top: auto;
+  border-color: rgba(248, 211, 107, 0.22);
+}
+
+.archived-list .saved-map {
+  opacity: 0.82;
 }
 
 textarea {
@@ -649,7 +703,11 @@ svg {
   }
 
   .canvas-card {
-    min-height: 680px;
+    min-height: 1020px;
+  }
+
+  .canvas-wrap {
+    min-height: 760px;
   }
 }
 

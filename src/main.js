@@ -32,17 +32,24 @@ app.innerHTML = `
           <button id="create-map-button" type="button">Créer</button>
           <button id="save-map-button" type="button">Enregistrer la carte</button>
         </div>
-        <div class="saved-panel" aria-label="Cartes enregistrées">
-          <div class="saved-header">
+        <details class="saved-panel saved-section" aria-label="Cartes enregistrées">
+          <summary class="saved-header">
             <strong>Cartes enregistrées</strong>
             <span id="saved-count">0</span>
-          </div>
+          </summary>
           <div id="saved-maps-list" class="saved-list"></div>
-        </div>
+        </details>
         <details class="source-details">
           <summary>Voir / modifier la source Markdown</summary>
           <textarea id="markdown-input" spellcheck="false"></textarea>
           <button id="render-button" type="button">Mettre à jour la carte</button>
+        </details>
+        <details class="saved-panel archive-section" aria-label="Archive des cartes">
+          <summary class="saved-header">
+            <strong>Archive</strong>
+            <span id="archived-count">0</span>
+          </summary>
+          <div id="archived-maps-list" class="saved-list archived-list"></div>
         </details>
       </aside>
 
@@ -109,6 +116,8 @@ const saveMapButton = document.querySelector('#save-map-button');
 const activeMapName = document.querySelector('#active-map-name');
 const savedCount = document.querySelector('#saved-count');
 const savedMapsList = document.querySelector('#saved-maps-list');
+const archivedCount = document.querySelector('#archived-count');
+const archivedMapsList = document.querySelector('#archived-maps-list');
 const renderButton = document.querySelector('#render-button');
 const mapViewport = document.querySelector('#map-viewport');
 const svg = document.querySelector('#mindmap');
@@ -192,8 +201,29 @@ confirmCreateMap.addEventListener('click', (event) => {
 });
 saveMapButton.addEventListener('click', saveCurrentMap);
 savedMapsList.addEventListener('click', (event) => {
+  const archiveButton = event.target.closest('button[data-archive-map-id]');
+  if (archiveButton) {
+    archiveSavedMap(archiveButton.dataset.archiveMapId);
+    return;
+  }
+
   const button = event.target.closest('button[data-map-id]');
-  if (!button) return;
+  if (!button || !savedMapsList.contains(button)) return;
+
+  const saved = savedMaps.find((map) => map.id === button.dataset.mapId);
+  if (!saved) return;
+
+  loadMarkdown(saved.markdown, saved.name, { id: saved.id });
+});
+archivedMapsList.addEventListener('click', (event) => {
+  const deleteButton = event.target.closest('button[data-delete-map-id]');
+  if (deleteButton) {
+    deleteArchivedMap(deleteButton.dataset.deleteMapId);
+    return;
+  }
+
+  const button = event.target.closest('button[data-map-id]');
+  if (!button || !archivedMapsList.contains(button)) return;
 
   const saved = savedMaps.find((map) => map.id === button.dataset.mapId);
   if (!saved) return;
@@ -399,6 +429,7 @@ async function saveCurrentMap() {
     id: activeMapId ?? createSavedMapId(),
     name: title,
     markdown: markdownInput.value,
+    archivedAt: existingIndex >= 0 ? (savedMaps[existingIndex].archivedAt ?? null) : null,
     updatedAt: now,
   };
 
@@ -416,28 +447,94 @@ async function saveCurrentMap() {
 }
 
 function renderSavedMaps() {
-  savedCount.textContent = `${savedMaps.length}`;
-  savedMapsList.innerHTML = '';
+  const activeMaps = savedMaps.filter((map) => !map.archivedAt);
+  const archivedMaps = savedMaps.filter((map) => map.archivedAt);
 
-  if (!savedMaps.length) {
+  savedCount.textContent = `${activeMaps.length}`;
+  archivedCount.textContent = `${archivedMaps.length}`;
+  savedMapsList.innerHTML = '';
+  archivedMapsList.innerHTML = '';
+
+  if (!activeMaps.length) {
     const empty = document.createElement('p');
     empty.className = 'saved-empty';
     empty.textContent = 'Aucune carte enregistrée.';
     savedMapsList.append(empty);
-    return;
+  } else {
+    activeMaps.forEach((map) => {
+      savedMapsList.append(renderMapRow(map, { action: 'archive' }));
+    });
   }
 
-  savedMaps.forEach((map) => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = `saved-map ${map.id === activeMapId ? 'active' : ''}`;
-    button.dataset.mapId = map.id;
-    button.innerHTML = `
-      <span>${escapeHtml(map.name)}</span>
-      <small>${formatSavedDate(map.updatedAt)}</small>
-    `;
-    savedMapsList.append(button);
-  });
+  if (!archivedMaps.length) {
+    const empty = document.createElement('p');
+    empty.className = 'saved-empty';
+    empty.textContent = 'Aucune carte archivée.';
+    archivedMapsList.append(empty);
+  } else {
+    archivedMaps.forEach((map) => {
+      archivedMapsList.append(renderMapRow(map, { action: 'delete' }));
+    });
+  }
+}
+
+function renderMapRow(map, options = {}) {
+  const row = document.createElement('div');
+  row.className = 'saved-map-row';
+
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = `saved-map ${map.id === activeMapId ? 'active' : ''}`;
+  button.dataset.mapId = map.id;
+  button.innerHTML = `
+    <span>${escapeHtml(map.name)}</span>
+    <small>${formatSavedDate(map.updatedAt)}</small>
+  `;
+  row.append(button);
+
+  if (options.action === 'archive') {
+    const archiveButton = document.createElement('button');
+    archiveButton.type = 'button';
+    archiveButton.className = 'map-action-button';
+    archiveButton.dataset.archiveMapId = map.id;
+    archiveButton.textContent = 'Archiver';
+    row.append(archiveButton);
+  }
+
+  if (options.action === 'delete') {
+    const deleteButton = document.createElement('button');
+    deleteButton.type = 'button';
+    deleteButton.className = 'map-action-button danger compact';
+    deleteButton.dataset.deleteMapId = map.id;
+    deleteButton.textContent = 'Supprimer';
+    row.append(deleteButton);
+  }
+
+  return row;
+}
+
+async function archiveSavedMap(mapId) {
+  const index = savedMaps.findIndex((map) => map.id === mapId);
+  if (index < 0) return;
+
+  const archivedMap = {
+    ...savedMaps[index],
+    archivedAt: new Date().toISOString(),
+  };
+  savedMaps[index] = archivedMap;
+  if (activeMapId === mapId) activeMapId = null;
+  await persistSavedMaps(archivedMap);
+  renderSavedMaps();
+}
+
+async function deleteArchivedMap(mapId) {
+  const map = savedMaps.find((savedMap) => savedMap.id === mapId);
+  if (!map?.archivedAt) return;
+
+  savedMaps = savedMaps.filter((savedMap) => savedMap.id !== mapId);
+  if (activeMapId === mapId) activeMapId = null;
+  await removePersistedMap(mapId);
+  renderSavedMaps();
 }
 
 function render(layout) {
@@ -855,7 +952,7 @@ async function loadSavedMaps() {
     if (response.ok) {
       const data = await response.json();
       remoteStorageAvailable = true;
-      return Array.isArray(data.maps) ? data.maps : [];
+      return Array.isArray(data.maps) ? data.maps.map(normalizeSavedMap).filter(Boolean) : [];
     }
   } catch {
     remoteStorageAvailable = false;
@@ -864,7 +961,7 @@ async function loadSavedMaps() {
   try {
     const parsed = JSON.parse(localStorage.getItem(SAVED_MAPS_KEY) ?? '[]');
     return Array.isArray(parsed)
-      ? parsed.filter((map) => map?.id && map?.name && typeof map.markdown === 'string')
+      ? parsed.map(normalizeSavedMap).filter(Boolean)
       : [];
   } catch {
     return [];
@@ -888,12 +985,41 @@ async function persistSavedMaps(savedMap) {
         }
         return;
       }
+      remoteStorageAvailable = false;
     } catch {
       remoteStorageAvailable = false;
     }
   }
 
   localStorage.setItem(SAVED_MAPS_KEY, JSON.stringify(savedMaps));
+}
+
+async function removePersistedMap(mapId) {
+  if (remoteStorageAvailable) {
+    try {
+      const response = await fetch(`/api/maps?id=${encodeURIComponent(mapId)}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) return;
+      remoteStorageAvailable = false;
+    } catch {
+      remoteStorageAvailable = false;
+    }
+  }
+
+  localStorage.setItem(SAVED_MAPS_KEY, JSON.stringify(savedMaps));
+}
+
+function normalizeSavedMap(map) {
+  if (!map?.id || !map?.name || typeof map.markdown !== 'string') return null;
+  return {
+    id: map.id,
+    name: map.name,
+    markdown: map.markdown,
+    updatedAt: map.updatedAt,
+    archivedAt: map.archivedAt ?? null,
+  };
 }
 
 function createSavedMapId() {

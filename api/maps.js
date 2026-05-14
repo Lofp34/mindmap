@@ -13,7 +13,7 @@ export default async function handler(request, response) {
 
     if (request.method === 'GET') {
       const rows = await sql`
-        SELECT id, name, markdown, updated_at
+        SELECT id, name, markdown, updated_at, archived_at
         FROM mind_maps
         ORDER BY updated_at DESC
       `;
@@ -25,26 +25,42 @@ export default async function handler(request, response) {
       const id = cleanText(body.id);
       const name = cleanText(body.name);
       const markdown = typeof body.markdown === 'string' ? body.markdown : '';
+      const archivedAt = normalizeTimestamp(body.archivedAt);
 
       if (!id || !name || !markdown.trim()) {
         return response.status(400).json({ error: 'id, name and markdown are required.' });
       }
 
       const rows = await sql`
-        INSERT INTO mind_maps (id, name, markdown, updated_at)
-        VALUES (${id}, ${name}, ${markdown}, NOW())
+        INSERT INTO mind_maps (id, name, markdown, archived_at, updated_at)
+        VALUES (${id}, ${name}, ${markdown}, ${archivedAt}, NOW())
         ON CONFLICT (id)
         DO UPDATE SET
           name = EXCLUDED.name,
           markdown = EXCLUDED.markdown,
+          archived_at = EXCLUDED.archived_at,
           updated_at = NOW()
-        RETURNING id, name, markdown, updated_at
+        RETURNING id, name, markdown, updated_at, archived_at
       `;
 
       return response.status(200).json({ map: toClientMap(rows[0]) });
     }
 
-    response.setHeader('Allow', 'GET, POST');
+    if (request.method === 'DELETE') {
+      const id = cleanText(request.query?.id ?? new URL(request.url, 'http://localhost').searchParams.get('id'));
+      if (!id) {
+        return response.status(400).json({ error: 'id is required.' });
+      }
+
+      await sql`
+        DELETE FROM mind_maps
+        WHERE id = ${id} AND archived_at IS NOT NULL
+      `;
+
+      return response.status(204).end();
+    }
+
+    response.setHeader('Allow', 'GET, POST, DELETE');
     return response.status(405).json({ error: 'Method not allowed.' });
   } catch (error) {
     return response.status(500).json({ error: error.message });
@@ -61,6 +77,10 @@ async function ensureSchema(sql) {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `;
+  await sql`
+    ALTER TABLE mind_maps
+    ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ
+  `;
 }
 
 function toClientMap(row) {
@@ -69,6 +89,7 @@ function toClientMap(row) {
     name: row.name,
     markdown: row.markdown,
     updatedAt: row.updated_at,
+    archivedAt: row.archived_at,
   };
 }
 
@@ -86,4 +107,10 @@ function normalizeBody(body) {
 
 function cleanText(value) {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function normalizeTimestamp(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
