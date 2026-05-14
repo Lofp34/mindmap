@@ -164,6 +164,7 @@ label {
   font-size: 0.9rem;
 }
 
+#template-count,
 #saved-count,
 #archived-count {
   display: grid;
@@ -190,6 +191,11 @@ label {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 0.45rem;
   align-items: stretch;
+}
+
+.map-actions {
+  display: grid;
+  gap: 0.35rem;
 }
 
 .saved-map {
@@ -237,6 +243,20 @@ label {
   background: rgba(29, 42, 68, 0.72);
   color: #cbd5e1;
   font-size: 0.76rem;
+}
+
+.map-actions .map-action-button {
+  min-height: 24px;
+  border-radius: 10px;
+  padding: 0 0.55rem;
+}
+
+.template-section {
+  border-color: rgba(118, 255, 210, 0.22);
+}
+
+.template-map {
+  border-color: rgba(118, 255, 210, 0.24);
 }
 
 .map-action-button.danger {
@@ -850,5 +870,13 @@ svg {
 
   input {
     width: 100%;
+  }
+
+  .saved-map-row {
+    grid-template-columns: 1fr;
+  }
+
+  .map-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

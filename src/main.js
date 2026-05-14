@@ -32,6 +32,13 @@ app.innerHTML = `
           <button id="create-map-button" type="button">Créer</button>
           <button id="save-map-button" type="button">Enregistrer la carte</button>
         </div>
+        <details class="saved-panel template-section" aria-label="Modèles de cartes">
+          <summary class="saved-header">
+            <strong>Modèles</strong>
+            <span id="template-count">0</span>
+          </summary>
+          <div id="template-maps-list" class="saved-list template-list"></div>
+        </details>
         <details class="saved-panel saved-section" aria-label="Cartes enregistrées">
           <summary class="saved-header">
             <strong>Cartes enregistrées</strong>
@@ -120,6 +127,8 @@ const cancelCreateMap = document.querySelector('#cancel-create-map');
 const confirmCreateMap = document.querySelector('#confirm-create-map');
 const saveMapButton = document.querySelector('#save-map-button');
 const activeMapName = document.querySelector('#active-map-name');
+const templateCount = document.querySelector('#template-count');
+const templateMapsList = document.querySelector('#template-maps-list');
 const savedCount = document.querySelector('#saved-count');
 const savedMapsList = document.querySelector('#saved-maps-list');
 const archivedCount = document.querySelector('#archived-count');
@@ -175,6 +184,69 @@ const MAX_ZOOM = 4;
 const FIT_PADDING = 56;
 const SAVED_MAPS_KEY = 'mindmap.savedMaps.v1';
 const INITIAL_DEPTH_LIMIT = 1;
+const BUILT_IN_TEMPLATES = [
+  {
+    id: 'builtin-aida',
+    name: 'AIDA',
+    description: 'Attention, intérêt, désir, action',
+    markdown: `# AIDA
+
+## Attention
+### Accroche principale
+### Problème visible
+### Promesse claire
+
+## Intérêt
+### Contexte client
+### Bénéfices concrets
+### Preuves ou exemples
+
+## Désir
+### Transformation attendue
+### Différenciation
+### Objections à lever
+
+## Action
+### Prochaine étape
+### Message d'appel à l'action
+### Suivi`,
+  },
+  {
+    id: 'builtin-omar',
+    name: 'OMAR',
+    description: 'Objectif, moyens, actions, rendez-vous, résultats',
+    markdown: `# OMAR - Développer mon business
+
+## Objectif
+### Développer mon business
+### Clarifier mon ambition commerciale
+### Prioriser les opportunités les plus rentables
+
+## Moyens
+### Compte LinkedIn
+### Portefeuille client
+### Partenaires
+### Nouvelle offre
+
+## Actions
+### Appeler mes anciens clients pour proposer ma nouvelle offre
+### Peaufiner ma nouvelle offre
+### Publier régulièrement sur LinkedIn
+### Solliciter mes partenaires
+
+## Rendez-vous
+### Dates de prospection
+### Dates de relance
+### Dates de livraison
+### Dates de mesure des résultats
+
+## Résultats
+### Nombre de contrats signés
+### Chiffre d'affaires généré
+### Taux de transformation
+### Prochaines décisions`,
+  },
+];
 
 let savedMaps = [];
 let remoteStorageAvailable = false;
@@ -211,7 +283,28 @@ confirmCreateMap.addEventListener('click', (event) => {
   createMapDialog.close();
 });
 saveMapButton.addEventListener('click', saveCurrentMap);
+templateMapsList.addEventListener('click', (event) => {
+  const removeButton = event.target.closest('button[data-remove-template-map-id]');
+  if (removeButton) {
+    removeSavedMapTemplate(removeButton.dataset.removeTemplateMapId);
+    return;
+  }
+
+  const button = event.target.closest('button[data-template-id]');
+  if (!button || !templateMapsList.contains(button)) return;
+
+  const template = findTemplate(button.dataset.templateId);
+  if (!template) return;
+
+  loadMarkdown(template.markdown, template.name);
+});
 savedMapsList.addEventListener('click', (event) => {
+  const templateButton = event.target.closest('button[data-template-map-id]');
+  if (templateButton) {
+    markSavedMapAsTemplate(templateButton.dataset.templateMapId);
+    return;
+  }
+
   const archiveButton = event.target.closest('button[data-archive-map-id]');
   if (archiveButton) {
     archiveSavedMap(archiveButton.dataset.archiveMapId);
@@ -578,6 +671,7 @@ async function saveCurrentMap() {
     name: title,
     markdown: markdownInput.value,
     archivedAt: existingIndex >= 0 ? (savedMaps[existingIndex].archivedAt ?? null) : null,
+    templateAt: existingIndex >= 0 ? (savedMaps[existingIndex].templateAt ?? null) : null,
     updatedAt: now,
   };
 
@@ -597,11 +691,21 @@ async function saveCurrentMap() {
 function renderSavedMaps() {
   const activeMaps = savedMaps.filter((map) => !map.archivedAt);
   const archivedMaps = savedMaps.filter((map) => map.archivedAt);
+  const templates = [
+    ...BUILT_IN_TEMPLATES,
+    ...savedMaps.filter((map) => map.templateAt),
+  ];
 
+  templateCount.textContent = `${templates.length}`;
   savedCount.textContent = `${activeMaps.length}`;
   archivedCount.textContent = `${archivedMaps.length}`;
+  templateMapsList.innerHTML = '';
   savedMapsList.innerHTML = '';
   archivedMapsList.innerHTML = '';
+
+  templates.forEach((template) => {
+    templateMapsList.append(renderTemplateRow(template));
+  });
 
   if (!activeMaps.length) {
     const empty = document.createElement('p');
@@ -610,7 +714,7 @@ function renderSavedMaps() {
     savedMapsList.append(empty);
   } else {
     activeMaps.forEach((map) => {
-      savedMapsList.append(renderMapRow(map, { action: 'archive' }));
+      savedMapsList.append(renderMapRow(map, { action: 'saved' }));
     });
   }
 
@@ -624,6 +728,35 @@ function renderSavedMaps() {
       archivedMapsList.append(renderMapRow(map, { action: 'delete' }));
     });
   }
+}
+
+function renderTemplateRow(template) {
+  const row = document.createElement('div');
+  row.className = 'saved-map-row';
+
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = `saved-map template-map ${template.id === activeMapId ? 'active' : ''}`;
+  button.dataset.templateId = template.id;
+  button.innerHTML = `
+    <span>${escapeHtml(template.name)}</span>
+    <small>${escapeHtml(template.description ?? 'Modèle personnalisé')}</small>
+  `;
+  row.append(button);
+
+  if (!template.id.startsWith('builtin-')) {
+    const actions = document.createElement('div');
+    actions.className = 'map-actions';
+    const removeButton = document.createElement('button');
+    removeButton.type = 'button';
+    removeButton.className = 'map-action-button';
+    removeButton.dataset.removeTemplateMapId = template.id;
+    removeButton.textContent = 'Retirer';
+    actions.append(removeButton);
+    row.append(actions);
+  }
+
+  return row;
 }
 
 function renderMapRow(map, options = {}) {
@@ -640,25 +773,71 @@ function renderMapRow(map, options = {}) {
   `;
   row.append(button);
 
-  if (options.action === 'archive') {
+  if (options.action === 'saved') {
+    const actions = document.createElement('div');
+    actions.className = 'map-actions';
+    if (!map.templateAt) {
+      const templateButton = document.createElement('button');
+      templateButton.type = 'button';
+      templateButton.className = 'map-action-button';
+      templateButton.dataset.templateMapId = map.id;
+      templateButton.textContent = 'Modèle';
+      actions.append(templateButton);
+    }
+
     const archiveButton = document.createElement('button');
     archiveButton.type = 'button';
     archiveButton.className = 'map-action-button';
     archiveButton.dataset.archiveMapId = map.id;
     archiveButton.textContent = 'Archiver';
-    row.append(archiveButton);
+    actions.append(archiveButton);
+    row.append(actions);
   }
 
   if (options.action === 'delete') {
+    const actions = document.createElement('div');
+    actions.className = 'map-actions';
     const deleteButton = document.createElement('button');
     deleteButton.type = 'button';
     deleteButton.className = 'map-action-button danger compact';
     deleteButton.dataset.deleteMapId = map.id;
     deleteButton.textContent = 'Supprimer';
-    row.append(deleteButton);
+    actions.append(deleteButton);
+    row.append(actions);
   }
 
   return row;
+}
+
+function findTemplate(templateId) {
+  return BUILT_IN_TEMPLATES.find((template) => template.id === templateId)
+    ?? savedMaps.find((map) => map.id === templateId && map.templateAt);
+}
+
+async function markSavedMapAsTemplate(mapId) {
+  const index = savedMaps.findIndex((map) => map.id === mapId);
+  if (index < 0) return;
+
+  const templateMap = {
+    ...savedMaps[index],
+    templateAt: new Date().toISOString(),
+  };
+  savedMaps[index] = templateMap;
+  await persistSavedMaps(templateMap);
+  renderSavedMaps();
+}
+
+async function removeSavedMapTemplate(mapId) {
+  const index = savedMaps.findIndex((map) => map.id === mapId);
+  if (index < 0) return;
+
+  const templateMap = {
+    ...savedMaps[index],
+    templateAt: null,
+  };
+  savedMaps[index] = templateMap;
+  await persistSavedMaps(templateMap);
+  renderSavedMaps();
 }
 
 async function archiveSavedMap(mapId) {
@@ -668,6 +847,7 @@ async function archiveSavedMap(mapId) {
   const archivedMap = {
     ...savedMaps[index],
     archivedAt: new Date().toISOString(),
+    templateAt: savedMaps[index].templateAt ?? null,
   };
   savedMaps[index] = archivedMap;
   if (activeMapId === mapId) activeMapId = null;
@@ -1176,6 +1356,7 @@ function normalizeSavedMap(map) {
     markdown: map.markdown,
     updatedAt: map.updatedAt,
     archivedAt: map.archivedAt ?? null,
+    templateAt: map.templateAt ?? null,
   };
 }
 

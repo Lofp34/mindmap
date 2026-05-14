@@ -13,7 +13,7 @@ export default async function handler(request, response) {
 
     if (request.method === 'GET') {
       const rows = await sql`
-        SELECT id, name, markdown, updated_at, archived_at
+        SELECT id, name, markdown, updated_at, archived_at, template_at
         FROM mind_maps
         ORDER BY updated_at DESC
       `;
@@ -26,21 +26,23 @@ export default async function handler(request, response) {
       const name = cleanText(body.name);
       const markdown = typeof body.markdown === 'string' ? body.markdown : '';
       const archivedAt = normalizeTimestamp(body.archivedAt);
+      const templateAt = normalizeTimestamp(body.templateAt);
 
       if (!id || !name || !markdown.trim()) {
         return response.status(400).json({ error: 'id, name and markdown are required.' });
       }
 
       const rows = await sql`
-        INSERT INTO mind_maps (id, name, markdown, archived_at, updated_at)
-        VALUES (${id}, ${name}, ${markdown}, ${archivedAt}, NOW())
+        INSERT INTO mind_maps (id, name, markdown, archived_at, template_at, updated_at)
+        VALUES (${id}, ${name}, ${markdown}, ${archivedAt}, ${templateAt}, NOW())
         ON CONFLICT (id)
         DO UPDATE SET
           name = EXCLUDED.name,
           markdown = EXCLUDED.markdown,
           archived_at = EXCLUDED.archived_at,
+          template_at = EXCLUDED.template_at,
           updated_at = NOW()
-        RETURNING id, name, markdown, updated_at, archived_at
+        RETURNING id, name, markdown, updated_at, archived_at, template_at
       `;
 
       return response.status(200).json({ map: toClientMap(rows[0]) });
@@ -81,6 +83,10 @@ async function ensureSchema(sql) {
     ALTER TABLE mind_maps
     ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ
   `;
+  await sql`
+    ALTER TABLE mind_maps
+    ADD COLUMN IF NOT EXISTS template_at TIMESTAMPTZ
+  `;
 }
 
 function toClientMap(row) {
@@ -90,6 +96,7 @@ function toClientMap(row) {
     markdown: row.markdown,
     updatedAt: row.updated_at,
     archivedAt: row.archived_at,
+    templateAt: row.template_at,
   };
 }
 
