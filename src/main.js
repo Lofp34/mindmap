@@ -28,7 +28,8 @@ app.innerHTML = `
         </div>
         <div class="file-actions">
           <input id="file-input" class="visually-hidden" type="file" accept=".md,.markdown,text/markdown,text/plain" />
-          <label for="file-input" class="file-button">Importer un Markdown</label>
+          <label for="file-input" class="file-button">Importer</label>
+          <button id="create-map-button" type="button">Créer</button>
           <button id="save-map-button" type="button">Enregistrer la carte</button>
         </div>
         <div class="saved-panel" aria-label="Cartes enregistrées">
@@ -83,11 +84,26 @@ app.innerHTML = `
         </div>
       </section>
     </section>
+    <dialog id="create-map-dialog" class="modal">
+      <form method="dialog" class="modal-panel">
+        <label for="create-map-title">Titre de la carte</label>
+        <input id="create-map-title" type="text" placeholder="Nœud central" />
+        <div class="modal-actions">
+          <button id="cancel-create-map" type="button" class="ghost">Annuler</button>
+          <button id="confirm-create-map" type="submit" class="primary">Créer</button>
+        </div>
+      </form>
+    </dialog>
   </main>
 `;
 
 const markdownInput = document.querySelector('#markdown-input');
 const fileInput = document.querySelector('#file-input');
+const createMapButton = document.querySelector('#create-map-button');
+const createMapDialog = document.querySelector('#create-map-dialog');
+const createMapTitle = document.querySelector('#create-map-title');
+const cancelCreateMap = document.querySelector('#cancel-create-map');
+const confirmCreateMap = document.querySelector('#confirm-create-map');
 const saveMapButton = document.querySelector('#save-map-button');
 const activeMapName = document.querySelector('#active-map-name');
 const savedCount = document.querySelector('#saved-count');
@@ -158,6 +174,20 @@ fileInput.addEventListener('change', async () => {
   fileInput.value = '';
 });
 
+createMapButton.addEventListener('click', () => {
+  createMapTitle.value = '';
+  createMapDialog.showModal();
+  createMapTitle.focus();
+});
+cancelCreateMap.addEventListener('click', () => {
+  createMapDialog.close();
+});
+confirmCreateMap.addEventListener('click', (event) => {
+  event.preventDefault();
+  const title = cleanTitle(createMapTitle.value) || 'Nouvelle carte';
+  loadMarkdown(`# ${title}`, title);
+  createMapDialog.close();
+});
 saveMapButton.addEventListener('click', saveCurrentMap);
 savedMapsList.addEventListener('click', (event) => {
   const button = event.target.closest('button[data-map-id]');
