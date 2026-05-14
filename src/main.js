@@ -88,6 +88,7 @@ app.innerHTML = `
           </div>
         </div>
         <div id="map-viewport" class="canvas-wrap">
+          <button id="map-fullscreen-button" class="map-fullscreen-button" type="button" aria-label="Afficher la carte en plein écran" title="Plein écran">⛶</button>
           <svg id="mindmap" role="img" aria-labelledby="map-title" viewBox="0 0 1200 800"></svg>
         </div>
       </section>
@@ -120,6 +121,7 @@ const archivedCount = document.querySelector('#archived-count');
 const archivedMapsList = document.querySelector('#archived-maps-list');
 const renderButton = document.querySelector('#render-button');
 const mapViewport = document.querySelector('#map-viewport');
+const mapFullscreenButton = document.querySelector('#map-fullscreen-button');
 const svg = document.querySelector('#mindmap');
 const nodeCount = document.querySelector('#node-count');
 const mapTitle = document.querySelector('#map-title');
@@ -348,6 +350,12 @@ function cancelSelectedNodeRename() {
 }
 
 function handleGlobalKeydown(event) {
+  if (event.key === 'Escape' && mapViewport.classList.contains('is-map-expanded')) {
+    event.preventDefault();
+    exitMapFullscreen();
+    return;
+  }
+
   if (event.key !== 'Enter' || !event.metaKey || event.isComposing) return;
   if (isEditingText(event.target) && event.target !== newNodeTitle) return;
 
@@ -357,6 +365,57 @@ function handleGlobalKeydown(event) {
   } else {
     addChildToSelectedNode();
   }
+}
+
+async function toggleMapFullscreen() {
+  if (isMapFullscreen()) {
+    await exitMapFullscreen();
+  } else {
+    await enterMapFullscreen();
+  }
+}
+
+async function enterMapFullscreen() {
+  autoFit = false;
+  try {
+    if (mapViewport.requestFullscreen) {
+      await mapViewport.requestFullscreen();
+    } else {
+      mapViewport.classList.add('is-map-expanded');
+      document.body.classList.add('map-expanded');
+    }
+  } catch {
+    mapViewport.classList.add('is-map-expanded');
+    document.body.classList.add('map-expanded');
+  }
+  updateMapFullscreenState();
+  window.setTimeout(() => centerOnNode(selectedNodeId), 80);
+}
+
+async function exitMapFullscreen() {
+  if (document.fullscreenElement === mapViewport) {
+    await document.exitFullscreen();
+  }
+  mapViewport.classList.remove('is-map-expanded');
+  document.body.classList.remove('map-expanded');
+  updateMapFullscreenState();
+  window.setTimeout(() => centerOnNode(selectedNodeId), 80);
+}
+
+function updateMapFullscreenState() {
+  const expanded = isMapFullscreen();
+  mapFullscreenButton.textContent = expanded ? '×' : '⛶';
+  mapFullscreenButton.setAttribute(
+    'aria-label',
+    expanded ? 'Quitter le plein écran' : 'Afficher la carte en plein écran',
+  );
+  mapFullscreenButton.title = expanded ? 'Quitter' : 'Plein écran';
+  updateViewportSize();
+  applyCamera();
+}
+
+function isMapFullscreen() {
+  return document.fullscreenElement === mapViewport || mapViewport.classList.contains('is-map-expanded');
 }
 
 zoomOutButton.addEventListener('click', () => {
@@ -375,6 +434,7 @@ centerButton.addEventListener('click', () => {
   autoFit = false;
   centerOnRoot();
 });
+mapFullscreenButton.addEventListener('click', toggleMapFullscreen);
 
 mapViewport.addEventListener('wheel', handleWheel, { passive: false });
 mapViewport.addEventListener('pointerdown', handlePointerDown);
@@ -390,6 +450,7 @@ mapViewport.addEventListener('click', () => {
   suppressNextNodeClick = false;
 });
 window.addEventListener('keydown', handleGlobalKeydown);
+document.addEventListener('fullscreenchange', updateMapFullscreenState);
 
 new ResizeObserver(() => {
   updateViewportSize();

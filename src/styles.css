@@ -570,9 +570,57 @@ button.danger {
   width: 100%;
   min-height: 0;
   overflow: hidden;
+  background: #08111f;
   cursor: grab;
   touch-action: none;
   user-select: none;
+}
+
+.map-fullscreen-button {
+  position: absolute;
+  top: max(0.85rem, env(safe-area-inset-top));
+  right: max(0.85rem, env(safe-area-inset-right));
+  z-index: 2;
+  display: grid;
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  min-height: 38px;
+  place-items: center;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 12px;
+  padding: 0;
+  background: rgba(8, 17, 31, 0.68);
+  color: #dbeafe;
+  font-size: 1rem;
+  backdrop-filter: blur(12px);
+}
+
+.map-fullscreen-button:hover,
+.map-fullscreen-button:focus-visible {
+  transform: none;
+  border-color: rgba(118, 255, 210, 0.58);
+  background: rgba(15, 23, 42, 0.92);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(118, 255, 210, 0.12);
+}
+
+.canvas-wrap:fullscreen,
+.canvas-wrap.is-map-expanded {
+  width: 100vw;
+  height: 100vh;
+  min-height: 100vh;
+  background: #08111f;
+}
+
+.canvas-wrap.is-map-expanded {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+}
+
+body.map-expanded {
+  overflow: hidden;
 }
 
 .canvas-wrap.is-panning {
@@ -703,11 +751,7 @@ svg {
   }
 
   .canvas-card {
-    min-height: 1020px;
-  }
-
-  .canvas-wrap {
-    min-height: 760px;
+    min-height: 680px;
   }
 }
 
