@@ -617,6 +617,11 @@ button.danger {
 }
 
 .map-fullscreen-button.is-exit {
+  position: fixed;
+  top: auto;
+  right: max(0.85rem, env(safe-area-inset-right));
+  bottom: max(0.85rem, env(safe-area-inset-bottom));
+  z-index: 2147483647;
   width: auto;
   min-width: 86px;
   padding: 0 0.85rem;
@@ -636,6 +641,12 @@ button.danger {
   z-index: 2147483647;
 }
 
+.canvas-wrap:fullscreen .map-fullscreen-button.is-exit,
+.canvas-wrap.is-map-expanded .map-fullscreen-button.is-exit {
+  top: auto;
+  bottom: max(0.85rem, env(safe-area-inset-bottom));
+}
+
 .map-fullscreen-button:hover,
 .map-fullscreen-button:focus-visible {
   transform: none;
@@ -649,7 +660,9 @@ button.danger {
 .canvas-wrap.is-map-expanded {
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   min-height: 100vh;
+  min-height: 100dvh;
   background: #08111f;
 }
 
@@ -664,15 +677,15 @@ body.map-expanded {
 }
 
 .node-action-menu {
-  position: absolute;
-  z-index: 30;
+  position: fixed;
+  z-index: 2147483646;
   display: grid;
   gap: 0.35rem;
   width: 150px;
   border: 1px solid rgba(148, 163, 184, 0.22);
   border-radius: 16px;
   padding: 0.4rem;
-  background: rgba(8, 17, 31, 0.94);
+  background: rgba(8, 17, 31, 0.98);
   box-shadow: 0 22px 62px rgba(0, 0, 0, 0.38);
   backdrop-filter: blur(16px);
 }

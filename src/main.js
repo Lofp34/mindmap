@@ -379,7 +379,8 @@ deleteNodeButton.addEventListener('click', () => {
 function addChildToSelectedNode() {
   const parent = findNode(sourceTree, selectedNodeId);
   if (!parent) return;
-  const title = cleanTitle(newNodeTitle.value) || 'Nouveau nœud';
+  const title = requestNodeTitle();
+  if (!title) return;
 
   const child = addChildNode(sourceTree, parent.id, title);
   selectedNodeId = child.id;
@@ -392,7 +393,8 @@ function addChildToSelectedNode() {
 function addSiblingToSelectedNode() {
   const selected = findNode(sourceTree, selectedNodeId);
   if (!selected || selected.depth === 0) return;
-  const title = cleanTitle(newNodeTitle.value) || 'Nouveau nœud';
+  const title = requestNodeTitle();
+  if (!title) return;
 
   const sibling = addSiblingNode(sourceTree, selected.id, title);
   selectedNodeId = sibling.id;
@@ -413,6 +415,13 @@ function deleteSelectedNode() {
   selectedNodeId = result.parent.id;
   syncMarkdownFromTree();
   render(currentLayout);
+}
+
+function requestNodeTitle() {
+  const defaultTitle = cleanTitle(newNodeTitle.value) || 'Nouveau nœud';
+  const title = globalThis.prompt('Nom du nœud', defaultTitle);
+  if (title === null) return null;
+  return cleanTitle(title) || defaultTitle;
 }
 
 function startRenamingSelectedNode() {
@@ -483,6 +492,14 @@ async function toggleMapFullscreen() {
 
 async function enterMapFullscreen() {
   autoFit = false;
+  if (shouldUseCssFullscreen()) {
+    mapViewport.classList.add('is-map-expanded');
+    document.body.classList.add('map-expanded');
+    updateMapFullscreenState();
+    window.setTimeout(() => centerOnNode(selectedNodeId), 80);
+    return;
+  }
+
   try {
     if (mapViewport.requestFullscreen) {
       await mapViewport.requestFullscreen();
@@ -525,6 +542,10 @@ function isMapFullscreen() {
   return document.fullscreenElement === mapViewport || mapViewport.classList.contains('is-map-expanded');
 }
 
+function shouldUseCssFullscreen() {
+  return globalThis.matchMedia?.('(max-width: 900px), (pointer: coarse)')?.matches ?? false;
+}
+
 function handleNodeActionMenuClick(event) {
   const button = event.target.closest('button[data-node-action]');
   if (!button) return;
@@ -553,10 +574,11 @@ function showNodeActionMenu(node, clientX, clientY) {
   nodeActionMenu.querySelector('[data-node-action="delete"]').disabled = node.depth === 0;
   nodeActionMenu.hidden = false;
 
-  const viewportRect = mapViewport.getBoundingClientRect();
   const menuRect = nodeActionMenu.getBoundingClientRect();
-  const x = clamp(clientX - viewportRect.left, 8, viewportRect.width - menuRect.width - 8);
-  const y = clamp(clientY - viewportRect.top, 8, viewportRect.height - menuRect.height - 8);
+  const maxX = Math.max(8, window.innerWidth - menuRect.width - 8);
+  const maxY = Math.max(8, window.innerHeight - menuRect.height - 8);
+  const x = clamp(clientX, 8, maxX);
+  const y = clamp(clientY, 8, maxY);
   nodeActionMenu.style.left = `${x}px`;
   nodeActionMenu.style.top = `${y}px`;
 }
