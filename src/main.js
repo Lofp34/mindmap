@@ -70,7 +70,8 @@ app.innerHTML = `
         <div class="edit-bar" aria-label="Édition du nœud sélectionné">
           <div>
             <span>Nœud sélectionné</span>
-            <strong id="selected-node-label">Sujet central</strong>
+            <button id="selected-node-label" class="selected-node-label" type="button" aria-label="Renommer le nœud sélectionné" title="Renommer le nœud sélectionné">Sujet central</button>
+            <input id="selected-node-title-input" class="selected-node-title-input" type="text" aria-label="Nouveau nom du nœud sélectionné" hidden />
           </div>
           <div class="edit-actions">
             <input id="new-node-title" type="text" placeholder="Titre du nouveau nœud" />
@@ -124,6 +125,7 @@ const fitButton = document.querySelector('#fit-button');
 const centerButton = document.querySelector('#center-button');
 const zoomLevel = document.querySelector('#zoom-level');
 const selectedNodeLabel = document.querySelector('#selected-node-label');
+const selectedNodeTitleInput = document.querySelector('#selected-node-title-input');
 const newNodeTitle = document.querySelector('#new-node-title');
 const addChildButton = document.querySelector('#add-child-button');
 const addSiblingButton = document.querySelector('#add-sibling-button');
@@ -213,35 +215,28 @@ nodeSearch.addEventListener('keydown', (event) => {
   event.preventDefault();
   moveSearch(event.shiftKey ? -1 : 1);
 });
+selectedNodeLabel.addEventListener('click', startRenamingSelectedNode);
+selectedNodeTitleInput.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    commitSelectedNodeRename();
+  }
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    cancelSelectedNodeRename();
+  }
+});
+selectedNodeTitleInput.addEventListener('blur', commitSelectedNodeRename);
 markdownInput.addEventListener('input', debounce(() => {
   sourceTree = parseMarkdownToTree(markdownInput.value);
   resetInteractionState();
   render(currentLayout);
 }, 450));
 addChildButton.addEventListener('click', () => {
-  const parent = findNode(sourceTree, selectedNodeId);
-  if (!parent) return;
-  const title = cleanTitle(newNodeTitle.value) || 'Nouveau nœud';
-
-  const child = addChildNode(sourceTree, parent.id, title);
-  selectedNodeId = child.id;
-  expandedIds.add(parent.id);
-  newNodeTitle.value = '';
-  syncMarkdownFromTree();
-  render(currentLayout);
+  addChildToSelectedNode();
 });
 addSiblingButton.addEventListener('click', () => {
-  const selected = findNode(sourceTree, selectedNodeId);
-  if (!selected || selected.depth === 0) return;
-  const title = cleanTitle(newNodeTitle.value) || 'Nouveau nœud';
-
-  const sibling = addSiblingNode(sourceTree, selected.id, title);
-  selectedNodeId = sibling.id;
-  const parent = findParent(sourceTree, sibling.id);
-  if (parent) expandedIds.add(parent.id);
-  newNodeTitle.value = '';
-  syncMarkdownFromTree();
-  render(currentLayout);
+  addSiblingToSelectedNode();
 });
 deleteNodeButton.addEventListener('click', () => {
   const selected = findNode(sourceTree, selectedNodeId);
@@ -254,6 +249,85 @@ deleteNodeButton.addEventListener('click', () => {
   syncMarkdownFromTree();
   render(currentLayout);
 });
+
+function addChildToSelectedNode() {
+  const parent = findNode(sourceTree, selectedNodeId);
+  if (!parent) return;
+  const title = cleanTitle(newNodeTitle.value) || 'Nouveau nœud';
+
+  const child = addChildNode(sourceTree, parent.id, title);
+  selectedNodeId = child.id;
+  expandedIds.add(parent.id);
+  newNodeTitle.value = '';
+  syncMarkdownFromTree();
+  render(currentLayout);
+}
+
+function addSiblingToSelectedNode() {
+  const selected = findNode(sourceTree, selectedNodeId);
+  if (!selected || selected.depth === 0) return;
+  const title = cleanTitle(newNodeTitle.value) || 'Nouveau nœud';
+
+  const sibling = addSiblingNode(sourceTree, selected.id, title);
+  selectedNodeId = sibling.id;
+  const parent = findParent(sourceTree, sibling.id);
+  if (parent) expandedIds.add(parent.id);
+  newNodeTitle.value = '';
+  syncMarkdownFromTree();
+  render(currentLayout);
+}
+
+function startRenamingSelectedNode() {
+  const selected = findNode(sourceTree, selectedNodeId);
+  if (!selected) return;
+
+  selectedNodeTitleInput.value = selected.title;
+  selectedNodeLabel.hidden = true;
+  selectedNodeTitleInput.hidden = false;
+  selectedNodeTitleInput.focus();
+  selectedNodeTitleInput.select();
+}
+
+function commitSelectedNodeRename() {
+  if (selectedNodeTitleInput.hidden) return;
+
+  const selected = findNode(sourceTree, selectedNodeId);
+  const title = cleanTitle(selectedNodeTitleInput.value);
+  selectedNodeTitleInput.hidden = true;
+  selectedNodeLabel.hidden = false;
+
+  if (!selected || !title || title === selected.title) {
+    renderSelectionState();
+    return;
+  }
+
+  selected.title = title;
+  if (selected.depth === 0) {
+    activeMapLabel = title;
+    activeMapName.textContent = title;
+  }
+  syncMarkdownFromTree();
+  render(currentLayout);
+}
+
+function cancelSelectedNodeRename() {
+  selectedNodeTitleInput.hidden = true;
+  selectedNodeLabel.hidden = false;
+  renderSelectionState();
+  selectedNodeLabel.focus();
+}
+
+function handleGlobalKeydown(event) {
+  if (event.key !== 'Enter' || !event.metaKey || event.isComposing) return;
+  if (isEditingText(event.target) && event.target !== newNodeTitle) return;
+
+  event.preventDefault();
+  if (event.shiftKey) {
+    addSiblingToSelectedNode();
+  } else {
+    addChildToSelectedNode();
+  }
+}
 
 zoomOutButton.addEventListener('click', () => {
   autoFit = false;
@@ -285,6 +359,7 @@ mapViewport.addEventListener('dblclick', (event) => {
 mapViewport.addEventListener('click', () => {
   suppressNextNodeClick = false;
 });
+window.addEventListener('keydown', handleGlobalKeydown);
 
 new ResizeObserver(() => {
   updateViewportSize();
@@ -762,6 +837,10 @@ function syncMarkdownFromTree() {
 
 function cleanTitle(title) {
   return title?.trim();
+}
+
+function isEditingText(target) {
+  return target?.closest?.('input, textarea, select, [contenteditable="true"]');
 }
 
 function cleanFileName(fileName) {
