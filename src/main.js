@@ -88,8 +88,13 @@ app.innerHTML = `
           </div>
         </div>
         <div id="map-viewport" class="canvas-wrap">
-          <button id="map-fullscreen-button" class="map-fullscreen-button" type="button" aria-label="Afficher la carte en plein écran" title="Plein écran">⛶</button>
           <svg id="mindmap" role="img" aria-labelledby="map-title" viewBox="0 0 1200 800"></svg>
+          <button id="map-fullscreen-button" class="map-fullscreen-button" type="button" aria-label="Afficher la carte en plein écran" title="Plein écran">⛶</button>
+          <div id="node-action-menu" class="node-action-menu" hidden>
+            <button type="button" data-node-action="child">+ enfant</button>
+            <button type="button" data-node-action="sibling">+ frère</button>
+            <button type="button" data-node-action="delete" class="danger">Supprimer</button>
+          </div>
         </div>
       </section>
     </section>
@@ -122,6 +127,7 @@ const archivedMapsList = document.querySelector('#archived-maps-list');
 const renderButton = document.querySelector('#render-button');
 const mapViewport = document.querySelector('#map-viewport');
 const mapFullscreenButton = document.querySelector('#map-fullscreen-button');
+const nodeActionMenu = document.querySelector('#node-action-menu');
 const svg = document.querySelector('#mindmap');
 const nodeCount = document.querySelector('#node-count');
 const mapTitle = document.querySelector('#map-title');
@@ -158,6 +164,9 @@ let autoFit = true;
 let isPanning = false;
 let panStart = null;
 let suppressNextNodeClick = false;
+let nodeLongPressTimeout = null;
+let nodeLongPressStart = null;
+let nodeActionMenuNodeId = null;
 const activePointers = new Map();
 let pinchStart = null;
 
@@ -271,15 +280,7 @@ addSiblingButton.addEventListener('click', () => {
   addSiblingToSelectedNode();
 });
 deleteNodeButton.addEventListener('click', () => {
-  const selected = findNode(sourceTree, selectedNodeId);
-  if (!selected || selected.depth === 0) return;
-  const result = removeNode(sourceTree, selected.id);
-  if (!result) return;
-
-  expandedIds.delete(selected.id);
-  selectedNodeId = result.parent.id;
-  syncMarkdownFromTree();
-  render(currentLayout);
+  deleteSelectedNode();
 });
 
 function addChildToSelectedNode() {
@@ -305,6 +306,18 @@ function addSiblingToSelectedNode() {
   const parent = findParent(sourceTree, sibling.id);
   if (parent) expandedIds.add(parent.id);
   newNodeTitle.value = '';
+  syncMarkdownFromTree();
+  render(currentLayout);
+}
+
+function deleteSelectedNode() {
+  const selected = findNode(sourceTree, selectedNodeId);
+  if (!selected || selected.depth === 0) return;
+  const result = removeNode(sourceTree, selected.id);
+  if (!result) return;
+
+  expandedIds.delete(selected.id);
+  selectedNodeId = result.parent.id;
   syncMarkdownFromTree();
   render(currentLayout);
 }
@@ -419,6 +432,73 @@ function isMapFullscreen() {
   return document.fullscreenElement === mapViewport || mapViewport.classList.contains('is-map-expanded');
 }
 
+function handleNodeActionMenuClick(event) {
+  const button = event.target.closest('button[data-node-action]');
+  if (!button) return;
+  const selected = findNode(sourceTree, nodeActionMenuNodeId);
+  if (!selected) return;
+
+  selectedNodeId = selected.id;
+  hideNodeActionMenu();
+
+  if (button.dataset.nodeAction === 'child') {
+    addChildToSelectedNode();
+  }
+  if (button.dataset.nodeAction === 'sibling') {
+    addSiblingToSelectedNode();
+  }
+  if (button.dataset.nodeAction === 'delete') {
+    deleteSelectedNode();
+  }
+}
+
+function showNodeActionMenu(node, clientX, clientY) {
+  selectedNodeId = node.id;
+  renderSelectionState();
+  nodeActionMenuNodeId = node.id;
+  nodeActionMenu.querySelector('[data-node-action="sibling"]').disabled = node.depth === 0;
+  nodeActionMenu.querySelector('[data-node-action="delete"]').disabled = node.depth === 0;
+  nodeActionMenu.hidden = false;
+
+  const viewportRect = mapViewport.getBoundingClientRect();
+  const menuRect = nodeActionMenu.getBoundingClientRect();
+  const x = clamp(clientX - viewportRect.left, 8, viewportRect.width - menuRect.width - 8);
+  const y = clamp(clientY - viewportRect.top, 8, viewportRect.height - menuRect.height - 8);
+  nodeActionMenu.style.left = `${x}px`;
+  nodeActionMenu.style.top = `${y}px`;
+}
+
+function hideNodeActionMenu() {
+  clearNodeLongPress();
+  nodeActionMenu.hidden = true;
+  nodeActionMenuNodeId = null;
+}
+
+function scheduleNodeLongPress(event, node) {
+  clearNodeLongPress();
+  if (event.pointerType === 'mouse') return;
+  const { clientX, clientY } = event;
+  nodeLongPressStart = { x: clientX, y: clientY };
+  nodeLongPressTimeout = window.setTimeout(() => {
+    nodeLongPressTimeout = null;
+    nodeLongPressStart = null;
+    suppressNextNodeClick = true;
+    showNodeActionMenu(node, clientX, clientY);
+  }, 560);
+}
+
+function handleNodeLongPressMove(event) {
+  if (!nodeLongPressStart) return;
+  const distanceFromStart = Math.hypot(event.clientX - nodeLongPressStart.x, event.clientY - nodeLongPressStart.y);
+  if (distanceFromStart > 10) clearNodeLongPress();
+}
+
+function clearNodeLongPress() {
+  if (nodeLongPressTimeout) window.clearTimeout(nodeLongPressTimeout);
+  nodeLongPressTimeout = null;
+  nodeLongPressStart = null;
+}
+
 zoomOutButton.addEventListener('click', () => {
   autoFit = false;
   zoomAtViewportPoint(viewportSize.width / 2, viewportSize.height / 2, 1 / 1.22);
@@ -436,6 +516,7 @@ centerButton.addEventListener('click', () => {
   centerOnRoot();
 });
 mapFullscreenButton.addEventListener('click', toggleMapFullscreen);
+nodeActionMenu.addEventListener('click', handleNodeActionMenuClick);
 
 mapViewport.addEventListener('wheel', handleWheel, { passive: false });
 mapViewport.addEventListener('pointerdown', handlePointerDown);
@@ -449,8 +530,13 @@ mapViewport.addEventListener('dblclick', (event) => {
 });
 mapViewport.addEventListener('click', () => {
   suppressNextNodeClick = false;
+  hideNodeActionMenu();
 });
 window.addEventListener('keydown', handleGlobalKeydown);
+window.addEventListener('pointerdown', (event) => {
+  if (nodeActionMenu.hidden || nodeActionMenu.contains(event.target)) return;
+  hideNodeActionMenu();
+});
 document.addEventListener('fullscreenchange', updateMapFullscreenState);
 
 new ResizeObserver(() => {
@@ -670,6 +756,15 @@ function renderNodes(nodes, parent) {
     });
     item.addEventListener('pointerdown', (event) => {
       event.stopPropagation();
+      scheduleNodeLongPress(event, node);
+    });
+    item.addEventListener('pointermove', handleNodeLongPressMove);
+    item.addEventListener('pointerup', clearNodeLongPress);
+    item.addEventListener('pointercancel', clearNodeLongPress);
+    item.addEventListener('contextmenu', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      showNodeActionMenu(node, event.clientX, event.clientY);
     });
     item.addEventListener('click', (event) => {
       event.stopPropagation();

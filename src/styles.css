@@ -608,6 +608,14 @@ button.danger {
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.36);
 }
 
+.canvas-wrap:fullscreen .map-fullscreen-button,
+.canvas-wrap.is-map-expanded .map-fullscreen-button {
+  position: fixed;
+  top: max(0.85rem, env(safe-area-inset-top));
+  right: max(0.85rem, env(safe-area-inset-right));
+  z-index: 2147483647;
+}
+
 .map-fullscreen-button:hover,
 .map-fullscreen-button:focus-visible {
   transform: none;
@@ -633,6 +641,41 @@ button.danger {
 
 body.map-expanded {
   overflow: hidden;
+}
+
+.node-action-menu {
+  position: absolute;
+  z-index: 30;
+  display: grid;
+  gap: 0.35rem;
+  width: 150px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 16px;
+  padding: 0.4rem;
+  background: rgba(8, 17, 31, 0.94);
+  box-shadow: 0 22px 62px rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(16px);
+}
+
+.node-action-menu[hidden] {
+  display: none;
+}
+
+.node-action-menu button {
+  min-height: 38px;
+  border-radius: 12px;
+  padding: 0 0.7rem;
+  text-align: left;
+  font-size: 0.84rem;
+}
+
+.node-action-menu button:hover {
+  transform: none;
+}
+
+.canvas-wrap:fullscreen .node-action-menu,
+.canvas-wrap.is-map-expanded .node-action-menu {
+  z-index: 2147483646;
 }
 
 .canvas-wrap.is-panning {
