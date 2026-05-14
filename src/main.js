@@ -651,16 +651,12 @@ async function saveCurrentMap() {
     id: activeMapId ?? createSavedMapId(),
     name: title,
     markdown: markdownInput.value,
-    archivedAt: existingIndex >= 0 ? (savedMaps[existingIndex].archivedAt ?? null) : null,
+    archivedAt: null,
     templateAt: existingIndex >= 0 ? (savedMaps[existingIndex].templateAt ?? null) : null,
     updatedAt: now,
   };
 
-  if (existingIndex >= 0) {
-    savedMaps[existingIndex] = savedMap;
-  } else {
-    savedMaps.unshift(savedMap);
-  }
+  moveSavedMapToTop(savedMap);
 
   activeMapId = savedMap.id;
   activeMapLabel = savedMap.name;
@@ -1448,8 +1444,7 @@ async function persistSavedMaps(savedMap) {
       if (response.ok) {
         const data = await response.json();
         if (data.map) {
-          const index = savedMaps.findIndex((map) => map.id === data.map.id);
-          if (index >= 0) savedMaps[index] = data.map;
+          moveSavedMapToTop(data.map);
         }
         return;
       }
@@ -1460,6 +1455,13 @@ async function persistSavedMaps(savedMap) {
   }
 
   localStorage.setItem(SAVED_MAPS_KEY, JSON.stringify(savedMaps));
+}
+
+function moveSavedMapToTop(savedMap) {
+  savedMaps = [
+    savedMap,
+    ...savedMaps.filter((map) => map.id !== savedMap.id),
+  ];
 }
 
 async function removePersistedMap(mapId) {
