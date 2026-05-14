@@ -580,7 +580,7 @@ button.danger {
   position: absolute;
   top: max(0.85rem, env(safe-area-inset-top));
   right: max(0.85rem, env(safe-area-inset-right));
-  z-index: 2;
+  z-index: 20;
   display: grid;
   width: 38px;
   min-width: 38px;
@@ -594,6 +594,18 @@ button.danger {
   color: #dbeafe;
   font-size: 1rem;
   backdrop-filter: blur(12px);
+}
+
+.map-fullscreen-button.is-exit {
+  width: auto;
+  min-width: 86px;
+  padding: 0 0.85rem;
+  border-color: rgba(248, 211, 107, 0.5);
+  background: rgba(15, 23, 42, 0.96);
+  color: #fef3c7;
+  font-size: 0.88rem;
+  font-weight: 900;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.36);
 }
 
 .map-fullscreen-button:hover,

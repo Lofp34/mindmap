@@ -404,7 +404,8 @@ async function exitMapFullscreen() {
 
 function updateMapFullscreenState() {
   const expanded = isMapFullscreen();
-  mapFullscreenButton.textContent = expanded ? '×' : '⛶';
+  mapFullscreenButton.textContent = expanded ? 'Quitter' : '⛶';
+  mapFullscreenButton.classList.toggle('is-exit', expanded);
   mapFullscreenButton.setAttribute(
     'aria-label',
     expanded ? 'Quitter le plein écran' : 'Afficher la carte en plein écran',
