@@ -97,11 +97,6 @@ app.innerHTML = `
         <div id="map-viewport" class="canvas-wrap">
           <svg id="mindmap" role="img" aria-labelledby="map-title" viewBox="0 0 1200 800"></svg>
           <button id="map-fullscreen-button" class="map-fullscreen-button" type="button" aria-label="Afficher la carte en plein écran" title="Plein écran">⛶</button>
-          <div id="node-action-menu" class="node-action-menu" hidden>
-            <button type="button" data-node-action="child">+ enfant</button>
-            <button type="button" data-node-action="sibling">+ frère</button>
-            <button type="button" data-node-action="delete" class="danger">Supprimer</button>
-          </div>
         </div>
       </section>
     </section>
@@ -115,6 +110,11 @@ app.innerHTML = `
         </div>
       </form>
     </dialog>
+    <div id="node-action-menu" class="node-action-menu" hidden>
+      <button type="button" data-node-action="child">+ enfant</button>
+      <button type="button" data-node-action="sibling">+ frère</button>
+      <button type="button" data-node-action="delete" class="danger">Supprimer</button>
+    </div>
   </main>
 `;
 
@@ -575,10 +575,11 @@ function showNodeActionMenu(node, clientX, clientY) {
   nodeActionMenu.hidden = false;
 
   const menuRect = nodeActionMenu.getBoundingClientRect();
-  const maxX = Math.max(8, window.innerWidth - menuRect.width - 8);
-  const maxY = Math.max(8, window.innerHeight - menuRect.height - 8);
-  const x = clamp(clientX, 8, maxX);
-  const y = clamp(clientY, 8, maxY);
+  const viewport = visibleViewportBounds();
+  const maxX = Math.max(viewport.left + 8, viewport.left + viewport.width - menuRect.width - 8);
+  const maxY = Math.max(viewport.top + 8, viewport.top + viewport.height - menuRect.height - 8);
+  const x = clamp(clientX, viewport.left + 8, maxX);
+  const y = clamp(clientY, viewport.top + 8, maxY);
   nodeActionMenu.style.left = `${x}px`;
   nodeActionMenu.style.top = `${y}px`;
 }
@@ -612,6 +613,16 @@ function clearNodeLongPress() {
   if (nodeLongPressTimeout) window.clearTimeout(nodeLongPressTimeout);
   nodeLongPressTimeout = null;
   nodeLongPressStart = null;
+}
+
+function visibleViewportBounds() {
+  const viewport = window.visualViewport;
+  return {
+    left: viewport?.offsetLeft ?? 0,
+    top: viewport?.offsetTop ?? 0,
+    width: viewport?.width ?? window.innerWidth,
+    height: viewport?.height ?? window.innerHeight,
+  };
 }
 
 zoomOutButton.addEventListener('click', () => {

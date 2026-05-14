@@ -688,6 +688,7 @@ body.map-expanded {
   background: rgba(8, 17, 31, 0.98);
   box-shadow: 0 22px 62px rgba(0, 0, 0, 0.38);
   backdrop-filter: blur(16px);
+  transform: translateZ(0);
 }
 
 .node-action-menu[hidden] {
@@ -704,11 +705,6 @@ body.map-expanded {
 
 .node-action-menu button:hover {
   transform: none;
-}
-
-.canvas-wrap:fullscreen .node-action-menu,
-.canvas-wrap.is-map-expanded .node-action-menu {
-  z-index: 2147483646;
 }
 
 .canvas-wrap.is-panning {
