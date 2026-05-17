@@ -106,7 +106,7 @@ struct MindMapCanvasView: View {
                 path.addLine(to: CGPoint(x: size.width, y: y))
                 y += spacing
             }
-            context.stroke(path, with: .color(Color.white.opacity(0.055)), lineWidth: 1)
+            context.stroke(path, with: .color(.gridLine), lineWidth: 1)
         }
         .background(Color.canvasBackground)
     }

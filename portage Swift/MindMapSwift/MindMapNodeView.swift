@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct MindMapNodeView: View {
     let node: LayoutNode
@@ -59,15 +60,97 @@ struct MindMapNodeView: View {
 }
 
 extension Color {
-    static let appBackground = Color(red: 0.035, green: 0.054, blue: 0.087)
-    static let canvasBackground = Color(red: 0.045, green: 0.068, blue: 0.112)
-    static let nodeBackground = Color(red: 0.095, green: 0.095, blue: 0.155)
-    static let branchBackground = Color(red: 0.055, green: 0.138, blue: 0.137)
-    static let nodeBorder = Color(red: 0.42, green: 0.34, blue: 0.58)
-    static let accentTeal = Color(red: 0.20, green: 0.84, blue: 0.70)
-    static let link = Color(red: 0.46, green: 0.58, blue: 0.84)
-    static let rootStart = Color(red: 0.52, green: 0.94, blue: 0.84)
-    static let rootEnd = Color(red: 0.36, green: 0.54, blue: 0.94)
-    static let rootText = Color(red: 0.02, green: 0.07, blue: 0.12)
-    static let primaryText = Color(red: 0.91, green: 0.94, blue: 0.98)
+    static var appBackground: Color {
+        adaptive(
+            light: rgb(247, 245, 242),
+            dark: rgb(9, 14, 22)
+        )
+    }
+
+    static var canvasBackground: Color {
+        adaptive(
+            light: rgb(255, 252, 248),
+            dark: rgb(12, 18, 30)
+        )
+    }
+
+    static var gridLine: Color {
+        adaptive(
+            light: rgb(31, 41, 51).withAlphaComponent(0.08),
+            dark: rgb(255, 255, 255).withAlphaComponent(0.055)
+        )
+    }
+
+    static var nodeBackground: Color {
+        adaptive(
+            light: rgb(255, 255, 255),
+            dark: rgb(24, 24, 40)
+        )
+    }
+
+    static var branchBackground: Color {
+        adaptive(
+            light: rgb(232, 246, 242),
+            dark: rgb(14, 35, 35)
+        )
+    }
+
+    static var nodeBorder: Color {
+        adaptive(
+            light: rgb(156, 146, 184),
+            dark: rgb(107, 87, 148)
+        )
+    }
+
+    static var accentTeal: Color {
+        adaptive(
+            light: rgb(15, 118, 110),
+            dark: rgb(51, 214, 178)
+        )
+    }
+
+    static var link: Color {
+        adaptive(
+            light: rgb(83, 108, 151),
+            dark: rgb(117, 148, 214)
+        )
+    }
+
+    static var rootStart: Color {
+        adaptive(
+            light: rgb(167, 241, 219),
+            dark: rgb(133, 240, 214)
+        )
+    }
+
+    static var rootEnd: Color {
+        adaptive(
+            light: rgb(139, 171, 244),
+            dark: rgb(92, 138, 240)
+        )
+    }
+
+    static var rootText: Color {
+        adaptive(
+            light: rgb(16, 32, 46),
+            dark: rgb(5, 16, 30)
+        )
+    }
+
+    static var primaryText: Color {
+        adaptive(
+            light: rgb(31, 41, 51),
+            dark: rgb(232, 238, 247)
+        )
+    }
+
+    private static func adaptive(light: UIColor, dark: UIColor) -> Color {
+        Color(UIColor { traits in
+            traits.userInterfaceStyle == .dark ? dark : light
+        })
+    }
+
+    private static func rgb(_ red: CGFloat, _ green: CGFloat, _ blue: CGFloat) -> UIColor {
+        UIColor(red: red / 255, green: green / 255, blue: blue / 255, alpha: 1)
+    }
 }

@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 
 struct ContentView: View {
     @EnvironmentObject private var model: MindMapAppModel
+    @AppStorage("mindmap.isNightMode") private var isNightMode = true
     @State private var showingLibrary = false
     @State private var showingCreateMap = false
     @State private var showingImporter = false
@@ -33,6 +34,12 @@ struct ContentView: View {
 
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Menu {
+                        Button {
+                            isNightMode.toggle()
+                        } label: {
+                            Label(isNightMode ? "Mode jour" : "Mode nuit", systemImage: isNightMode ? "sun.max" : "moon")
+                        }
+
                         Button {
                             model.requestRecenter()
                         } label: {
@@ -124,6 +131,7 @@ struct ContentView: View {
                 Text(model.errorMessage ?? "")
             }
         }
+        .preferredColorScheme(isNightMode ? .dark : .light)
     }
 
     private func commitNodeCreation(
