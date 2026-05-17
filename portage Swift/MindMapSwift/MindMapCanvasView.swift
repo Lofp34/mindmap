@@ -83,6 +83,9 @@ struct MindMapCanvasView: View {
             .onChange(of: model.layoutMode) { _, _ in
                 fit(layout: layout, viewport: viewport)
             }
+            .onChange(of: model.recenterRequestID) { _, _ in
+                center(on: model.root.id, layout: layout, viewport: viewport)
+            }
         }
         .background(Color.appBackground.ignoresSafeArea())
     }

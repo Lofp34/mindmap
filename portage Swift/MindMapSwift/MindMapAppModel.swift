@@ -9,13 +9,14 @@ final class MindMapAppModel: ObservableObject {
     @Published var activeMapName: String = "Exemple intégré"
     @Published var selectedNodeID: UUID?
     @Published var expandedIDs: Set<UUID> = []
+    @Published var visibleDepthLimit: Int = 1
     @Published var layoutMode: MindMapLayoutMode = .radial
     @Published var searchText: String = ""
     @Published var activeSearchIndex: Int = -1
     @Published var errorMessage: String?
+    @Published var recenterRequestID = UUID()
 
     private let store: MapStoring
-    private let initialDepthLimit = 1
 
     init(store: MapStoring = LocalMapStore()) {
         self.store = store
@@ -29,7 +30,7 @@ final class MindMapAppModel: ObservableObject {
     }
 
     var visibleRoot: MindMapNode {
-        root.visible(expandedIDs: expandedIDs, initialDepthLimit: initialDepthLimit)
+        root.visible(expandedIDs: expandedIDs, initialDepthLimit: visibleDepthLimit)
     }
 
     var selectedNode: MindMapNode? {
@@ -69,6 +70,7 @@ final class MindMapAppModel: ObservableObject {
         activeMapName = name ?? root.title
         selectedNodeID = root.id
         expandedIDs = []
+        visibleDepthLimit = 1
         searchText = ""
         activeSearchIndex = -1
     }
@@ -76,6 +78,7 @@ final class MindMapAppModel: ObservableObject {
     func createMap(title: String) {
         let clean = title.trimmedOrUntitled
         loadMarkdown("# \(clean)", name: clean)
+        saveCurrentMap()
     }
 
     func updateFromSource(_ source: String) {
@@ -167,6 +170,7 @@ final class MindMapAppModel: ObservableObject {
         selectedNodeID = added.id
         revealPath(to: added.id)
         activeMapName = root.title
+        saveCurrentMap()
         return added
     }
 
@@ -175,6 +179,7 @@ final class MindMapAppModel: ObservableObject {
         if nodeID == root.id {
             activeMapName = root.title
         }
+        saveCurrentMap()
     }
 
     func deleteSelectedNode() {
@@ -183,6 +188,7 @@ final class MindMapAppModel: ObservableObject {
         _ = root.remove(id: selectedNodeID)
         expandedIDs.remove(selectedNodeID)
         self.selectedNodeID = parent?.id ?? root.id
+        saveCurrentMap()
     }
 
     func focusSearchResult(offset: Int) -> UUID? {
@@ -210,6 +216,45 @@ final class MindMapAppModel: ObservableObject {
         return focusSearchResult(offset: 1)
     }
 
+    func requestRecenter() {
+        recenterRequestID = UUID()
+    }
+
+    func toggleLayoutMode() {
+        layoutMode = layoutMode == .radial ? .right : .radial
+    }
+
+    func collapseOneLevel() {
+        let visibleNodes = visibleRoot.flattened
+        let deepestVisibleDepth = visibleNodes.map(\.depth).max() ?? 0
+
+        guard deepestVisibleDepth > 0 else {
+            selectedNodeID = root.id
+            return
+        }
+
+        if deepestVisibleDepth <= visibleDepthLimit {
+            visibleDepthLimit = max(0, visibleDepthLimit - 1)
+            if visibleDepthLimit == 0 {
+                expandedIDs.removeAll()
+            } else {
+                trimExpandedIDs(maxDepth: visibleDepthLimit)
+            }
+        } else {
+            let parentDepthToCollapse = deepestVisibleDepth - 1
+            expandedIDs.subtract(
+                root.flattened
+                    .filter { $0.depth == parentDepthToCollapse }
+                    .map(\.id)
+            )
+        }
+
+        let remainingVisibleIDs = Set(visibleRoot.flattened.map(\.id))
+        if let selectedNodeID, !remainingVisibleIDs.contains(selectedNodeID) {
+            self.selectedNodeID = root.id
+        }
+    }
+
     private var existingMap: SavedMindMap? {
         guard let activeMapID else { return nil }
         return savedMaps.first { $0.id == activeMapID }
@@ -218,6 +263,12 @@ final class MindMapAppModel: ObservableObject {
     private func revealPath(to nodeID: UUID) {
         guard let path = root.path(to: nodeID) else { return }
         expandedIDs.formUnion(path)
+        visibleDepthLimit = max(visibleDepthLimit, min(1, root.node(id: nodeID)?.depth ?? 0))
+    }
+
+    private func trimExpandedIDs(maxDepth: Int) {
+        let allowed = Set(root.flattened.filter { $0.depth <= maxDepth }.map(\.id))
+        expandedIDs = expandedIDs.intersection(allowed)
     }
 
     private func loadSavedMaps() {

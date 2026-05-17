@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -5,12 +6,12 @@ struct ContentView: View {
     @EnvironmentObject private var model: MindMapAppModel
     @State private var showingLibrary = false
     @State private var showingCreateMap = false
-    @State private var showingSource = false
     @State private var showingImporter = false
+    @State private var showingExporter = false
     @State private var nodeCreationRequest: NodeCreationRequest?
     @State private var renameRequest: RenameRequest?
 
-    private let markdownType = UTType(filenameExtension: "md") ?? .plainText
+    private let markdownType = UTType.markdownMindMap
 
     var body: some View {
         NavigationStack {
@@ -31,10 +32,26 @@ struct ContentView: View {
                 }
 
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button {
-                        model.saveCurrentMap()
+                    Menu {
+                        Button {
+                            model.requestRecenter()
+                        } label: {
+                            Label("Recentrer la mind map", systemImage: "scope")
+                        }
+
+                        Button {
+                            model.toggleLayoutMode()
+                        } label: {
+                            Label(model.layoutMode == .radial ? "Vue à droite" : "Vue horloge", systemImage: "arrow.triangle.2.circlepath")
+                        }
+
+                        Button {
+                            model.collapseOneLevel()
+                        } label: {
+                            Label("Replier un niveau", systemImage: "rectangle.compress.vertical")
+                        }
                     } label: {
-                        Label("Enregistrer", systemImage: "tray.and.arrow.down")
+                        Image(systemName: "slider.horizontal.3")
                     }
 
                     Menu {
@@ -45,21 +62,15 @@ struct ContentView: View {
                         }
 
                         Button {
+                            showingExporter = true
+                        } label: {
+                            Label("Exporter Markdown", systemImage: "square.and.arrow.up")
+                        }
+
+                        Button {
                             showingCreateMap = true
                         } label: {
                             Label("Créer une carte", systemImage: "plus.square")
-                        }
-
-                        Button {
-                            showingSource = true
-                        } label: {
-                            Label("Modifier la source", systemImage: "doc.plaintext")
-                        }
-
-                        Button {
-                            model.saveCurrentAsTemplate()
-                        } label: {
-                            Label("Enregistrer comme modèle", systemImage: "rectangle.on.rectangle")
                         }
                     } label: {
                         Image(systemName: "ellipsis.circle")
@@ -74,12 +85,6 @@ struct ContentView: View {
                 CreateMapView { title in
                     model.createMap(title: title)
                     showingCreateMap = false
-                }
-            }
-            .sheet(isPresented: $showingSource) {
-                SourceEditorView(source: model.markdown) { source in
-                    model.updateFromSource(source)
-                    showingSource = false
                 }
             }
             .sheet(item: $nodeCreationRequest) { request in
@@ -99,6 +104,16 @@ struct ContentView: View {
                 allowsMultipleSelection: false
             ) { result in
                 importMarkdown(result)
+            }
+            .fileExporter(
+                isPresented: $showingExporter,
+                document: MarkdownExportDocument(text: model.markdown),
+                contentType: markdownType,
+                defaultFilename: exportFileName
+            ) { result in
+                if case .failure = result {
+                    model.errorMessage = "Le Markdown n'a pas pu être exporté."
+                }
             }
             .alert("Action impossible", isPresented: Binding(
                 get: { model.errorMessage != nil },
@@ -144,8 +159,44 @@ struct ContentView: View {
             let markdown = try String(contentsOf: url, encoding: .utf8)
             let name = url.deletingPathExtension().lastPathComponent
             model.loadMarkdown(markdown, name: name)
+            model.saveCurrentMap()
         } catch {
             model.errorMessage = "Le fichier Markdown n'a pas pu être importé."
         }
     }
+
+    private var exportFileName: String {
+        let clean = model.activeMapName
+            .replacingOccurrences(of: "/", with: "-")
+            .replacingOccurrences(of: ":", with: "-")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return clean.isEmpty ? "mind-map" : clean
+    }
+}
+
+struct MarkdownExportDocument: FileDocument {
+    static var readableContentTypes: [UTType] { [.markdownMindMap, .plainText] }
+    static var writableContentTypes: [UTType] { [.markdownMindMap, .plainText] }
+
+    var text: String
+
+    init(text: String) {
+        self.text = text
+    }
+
+    init(configuration: ReadConfiguration) throws {
+        guard let data = configuration.file.regularFileContents,
+              let text = String(data: data, encoding: .utf8) else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        self.text = text
+    }
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        FileWrapper(regularFileWithContents: Data(text.utf8))
+    }
+}
+
+private extension UTType {
+    static let markdownMindMap = UTType(filenameExtension: "md") ?? .plainText
 }

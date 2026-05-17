@@ -55,6 +55,19 @@ final class MindMapCoreTests: XCTestCase {
         XCTAssertEqual(visible.children[1].children, [])
     }
 
+    func testVisibleTreeCanShowOnlyCentralNode() {
+        let root = MarkdownMindMapParser.parse("""
+        # Carte
+        ## A
+        ## B
+        """)
+
+        let visible = root.visible(expandedIDs: [], initialDepthLimit: 0)
+
+        XCTAssertEqual(visible.title, "Carte")
+        XCTAssertEqual(visible.children, [])
+    }
+
     @MainActor
     func testSaveMovesArchivedMapBackToSavedMaps() {
         let url = FileManager.default.temporaryDirectory
@@ -93,5 +106,31 @@ final class MindMapCoreTests: XCTestCase {
         XCTAssertEqual(layout.nodes.count, 5)
         XCTAssertEqual(layout.links.count, 4)
         XCTAssertTrue(layout.nodes.allSatisfy { $0.size.width > 0 && $0.size.height > 0 })
+    }
+
+    @MainActor
+    func testCollapseOneLevelEventuallyKeepsOnlyCentralNode() {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("json")
+        let model = MindMapAppModel(store: LocalMapStore(fileURL: url))
+        model.loadMarkdown("""
+        # Carte
+        ## A
+        ### A1
+        #### A1a
+        ## B
+        ### B1
+        """)
+
+        model.selectAndExpand(model.root.children[0].id)
+        model.selectAndExpand(model.root.children[0].children[0].id)
+        XCTAssertGreaterThan(model.visibleRoot.flattened.count, 1)
+
+        model.collapseOneLevel()
+        model.collapseOneLevel()
+        model.collapseOneLevel()
+
+        XCTAssertEqual(model.visibleRoot.flattened.map(\.title), ["Carte"])
     }
 }

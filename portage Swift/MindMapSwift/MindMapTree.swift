@@ -27,9 +27,12 @@ extension MindMapNode {
 
     func visible(expandedIDs: Set<UUID>, initialDepthLimit: Int = 1) -> MindMapNode {
         var copy = self
-        copy.children = children.compactMap { child in
-            child.visibleCopy(expandedIDs: expandedIDs, initialDepthLimit: initialDepthLimit, parentShowsChildren: true)
-        }
+        let rootShowsChildren = initialDepthLimit > 0 || expandedIDs.contains(id)
+        copy.children = rootShowsChildren
+            ? children.compactMap { child in
+                child.visibleCopy(expandedIDs: expandedIDs, initialDepthLimit: initialDepthLimit, parentShowsChildren: true)
+            }
+            : []
         return copy
     }
 
