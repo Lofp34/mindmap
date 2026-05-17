@@ -56,8 +56,9 @@ struct ContentView: View {
                         Button {
                             showingCollapseLevels = true
                         } label: {
-                            Label("Replier", systemImage: "rectangle.compress.vertical")
+                            Label("Afficher les niveaux", systemImage: "rectangle.compress.vertical")
                         }
+                        .disabled(model.visibleLevelChoices.isEmpty)
                     } label: {
                         Image(systemName: "slider.horizontal.3")
                     }
@@ -132,19 +133,19 @@ struct ContentView: View {
                 Text(model.errorMessage ?? "")
             }
             .confirmationDialog(
-                "Replier combien de niveaux ?",
+                "Afficher combien de niveaux ?",
                 isPresented: $showingCollapseLevels,
                 titleVisibility: .visible
             ) {
-                ForEach(1...5, id: \.self) { levelCount in
+                ForEach(model.visibleLevelChoices, id: \.self) { levelCount in
                     Button("\(levelCount) \(levelCount == 1 ? "niveau" : "niveaux")") {
-                        model.collapseLevels(levelCount)
+                        model.displayLevels(levelCount)
                     }
                 }
 
                 Button("Annuler", role: .cancel) {}
             } message: {
-                Text("Choisissez le nombre de niveaux à refermer en une fois.")
+                Text("1 niveau affiche le centre et ses branches directes.")
             }
         }
         .preferredColorScheme(isNightMode ? .dark : .light)

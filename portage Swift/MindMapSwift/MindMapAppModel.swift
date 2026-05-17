@@ -65,6 +65,12 @@ final class MindMapAppModel: ObservableObject {
             .map(\.id)
     }
 
+    var visibleLevelChoices: [Int] {
+        let deepestVisibleDepth = visibleRoot.flattened.map(\.depth).max() ?? 0
+        guard deepestVisibleDepth > 0 else { return [] }
+        return Array(1...deepestVisibleDepth)
+    }
+
     func loadMarkdown(_ markdown: String, name: String? = nil, id: UUID? = nil) {
         root = MarkdownMindMapParser.parse(markdown)
         activeMapID = id
@@ -311,10 +317,14 @@ final class MindMapAppModel: ObservableObject {
         layoutMode = layoutMode == .radial ? .right : .radial
     }
 
-    func collapseLevels(_ count: Int) {
-        guard count > 0 else { return }
-        for _ in 0..<min(count, 5) {
-            collapseOneLevel()
+    func displayLevels(_ count: Int) {
+        let targetDepth = max(0, count)
+        visibleDepthLimit = targetDepth
+        trimExpandedIDs(showingThrough: targetDepth)
+
+        let remainingVisibleIDs = Set(visibleRoot.flattened.map(\.id))
+        if let selectedNodeID, !remainingVisibleIDs.contains(selectedNodeID) {
+            self.selectedNodeID = root.id
         }
     }
 
@@ -375,6 +385,11 @@ final class MindMapAppModel: ObservableObject {
 
     private func trimExpandedIDs(maxDepth: Int) {
         let allowed = Set(root.flattened.filter { $0.depth <= maxDepth }.map(\.id))
+        expandedIDs = expandedIDs.intersection(allowed)
+    }
+
+    private func trimExpandedIDs(showingThrough maxDepth: Int) {
+        let allowed = Set(root.flattened.filter { $0.depth < maxDepth }.map(\.id))
         expandedIDs = expandedIDs.intersection(allowed)
     }
 

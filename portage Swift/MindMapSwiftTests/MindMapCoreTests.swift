@@ -203,7 +203,7 @@ final class MindMapCoreTests: XCTestCase {
     }
 
     @MainActor
-    func testCollapseLevelsClosesMultipleLevelsAtOnce() {
+    func testVisibleLevelChoicesMatchCurrentlyDisplayedDepth() {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension("json")
@@ -217,14 +217,47 @@ final class MindMapCoreTests: XCTestCase {
         ### B1
         """)
 
+        XCTAssertEqual(model.visibleLevelChoices, [1])
+
+        model.selectAndExpand(model.root.children[0].id)
+        XCTAssertEqual(model.visibleLevelChoices, [1, 2])
+
+        model.selectAndExpand(model.root.children[0].children[0].id)
+        XCTAssertEqual(model.visibleLevelChoices, [1, 2, 3])
+    }
+
+    @MainActor
+    func testDisplayLevelsShowsRequestedDepth() {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("json")
+        let model = MindMapAppModel(store: LocalMapStore(fileURL: url))
+        model.loadMarkdown("""
+        # Carte
+        ## A
+        ### A1
+        #### A1a
+        ## B
+        ### B1
+        #### B1a
+        """)
+
         model.selectAndExpand(model.root.children[0].id)
         model.selectAndExpand(model.root.children[0].children[0].id)
         XCTAssertTrue(model.visibleRoot.flattened.contains { $0.title == "A1a" })
 
-        model.collapseLevels(2)
+        model.displayLevels(2)
+
+        XCTAssertEqual(model.visibleRoot.children.map(\.title), ["A", "B"])
+        XCTAssertEqual(model.visibleRoot.children[0].children.map(\.title), ["A1"])
+        XCTAssertEqual(model.visibleRoot.children[1].children.map(\.title), ["B1"])
+        XCTAssertFalse(model.visibleRoot.flattened.contains { $0.title == "A1a" })
+        XCTAssertFalse(model.visibleRoot.flattened.contains { $0.title == "B1a" })
+
+        model.displayLevels(1)
 
         XCTAssertEqual(model.visibleRoot.children.map(\.title), ["A", "B"])
         XCTAssertEqual(model.visibleRoot.children[0].children, [])
-        XCTAssertEqual(model.visibleRoot.children[1].children, [])
+        XCTAssertEqual(model.selectedNodeID, model.root.id)
     }
 }
