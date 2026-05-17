@@ -32,7 +32,7 @@ struct MindMapCanvasView: View {
                     MindMapNodeView(
                         node: node,
                         selected: model.selectedNodeID == node.id,
-                        searchHit: activeSearchID == node.id
+                        searchHit: false
                     )
                     .position(transform(node.position))
                     .onTapGesture {
@@ -69,12 +69,6 @@ struct MindMapCanvasView: View {
                     }
                 }
 
-                VStack {
-                    canvasToolbar(layout: layout, viewport: viewport)
-                    Spacer()
-                    selectedNodeBar
-                }
-                .padding(12)
             }
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             .padding(.horizontal, 10)
@@ -91,144 +85,6 @@ struct MindMapCanvasView: View {
             }
         }
         .background(Color.appBackground.ignoresSafeArea())
-    }
-
-    private func canvasToolbar(layout: MindMapLayoutResult, viewport: CGSize) -> some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 8) {
-                TextField("Rechercher", text: $model.searchText)
-                    .textFieldStyle(.roundedBorder)
-                    .submitLabel(.search)
-                    .onSubmit {
-                        if let id = model.resetSearchFocus() {
-                            center(on: id, layout: layout, viewport: viewport)
-                        }
-                    }
-                    .onChange(of: model.searchText) { _, _ in
-                        if let id = model.resetSearchFocus() {
-                            center(on: id, layout: layout, viewport: viewport)
-                        }
-                    }
-
-                Button {
-                    if let id = model.focusSearchResult(offset: -1) {
-                        center(on: id, layout: layout, viewport: viewport)
-                    }
-                } label: {
-                    Image(systemName: "chevron.left")
-                }
-                .disabled(model.searchMatches.isEmpty)
-
-                Text(searchCounter)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(minWidth: 38)
-
-                Button {
-                    if let id = model.focusSearchResult(offset: 1) {
-                        center(on: id, layout: layout, viewport: viewport)
-                    }
-                } label: {
-                    Image(systemName: "chevron.right")
-                }
-                .disabled(model.searchMatches.isEmpty)
-            }
-
-            HStack(spacing: 8) {
-                Button {
-                    setScale(scale / 1.18, viewport: viewport)
-                } label: {
-                    Image(systemName: "minus.magnifyingglass")
-                }
-
-                Text("\(Int(scale * 100)) %")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                    .frame(width: 54)
-
-                Button {
-                    setScale(scale * 1.18, viewport: viewport)
-                } label: {
-                    Image(systemName: "plus.magnifyingglass")
-                }
-
-                Button("Ajuster") {
-                    fit(layout: layout, viewport: viewport)
-                }
-
-                Button(model.layoutMode.label) {
-                    model.layoutMode = model.layoutMode == .radial ? .right : .radial
-                }
-                .buttonStyle(.borderedProminent)
-
-                Button("Recentrer") {
-                    center(on: model.root.id, layout: layout, viewport: viewport)
-                }
-            }
-            .buttonStyle(.bordered)
-            .font(.caption)
-        }
-        .padding(10)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-    }
-
-    private var selectedNodeBar: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(model.selectedNode?.title ?? "Aucun nœud sélectionné")
-                .font(.headline)
-                .lineLimit(2)
-
-            HStack {
-                Button {
-                    if let id = model.selectedNodeID {
-                        nodeCreationRequest = NodeCreationRequest(action: .child, referenceID: id)
-                    }
-                } label: {
-                    Label("Enfant", systemImage: "plus")
-                }
-
-                Button {
-                    if let node = model.selectedNode, node.depth > 0 {
-                        nodeCreationRequest = NodeCreationRequest(action: .sibling, referenceID: node.id)
-                    }
-                } label: {
-                    Label("Frère", systemImage: "plus.rectangle.on.rectangle")
-                }
-                .disabled(model.selectedNode?.depth == 0)
-
-                Button {
-                    if let node = model.selectedNode {
-                        renameRequest = RenameRequest(nodeID: node.id, currentTitle: node.title)
-                    }
-                } label: {
-                    Label("Renommer", systemImage: "pencil")
-                }
-
-                Button(role: .destructive) {
-                    model.deleteSelectedNode()
-                } label: {
-                    Label("Supprimer", systemImage: "trash")
-                }
-                .disabled(model.selectedNode?.depth == 0)
-            }
-            .font(.caption)
-            .buttonStyle(.bordered)
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-    }
-
-    private var searchCounter: String {
-        let total = model.searchMatches.count
-        guard total > 0, model.activeSearchIndex >= 0 else { return "0/0" }
-        return "\(model.activeSearchIndex + 1)/\(total)"
-    }
-
-    private var activeSearchID: UUID? {
-        let matches = model.searchMatches
-        guard model.activeSearchIndex >= 0, model.activeSearchIndex < matches.count else { return nil }
-        return matches[model.activeSearchIndex]
     }
 
     private var backgroundGrid: some View {
