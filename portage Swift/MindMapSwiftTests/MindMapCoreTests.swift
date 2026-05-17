@@ -201,4 +201,30 @@ final class MindMapCoreTests: XCTestCase {
 
         XCTAssertEqual(model.visibleRoot.flattened.map(\.title), ["Carte"])
     }
+
+    @MainActor
+    func testCollapseLevelsClosesMultipleLevelsAtOnce() {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("json")
+        let model = MindMapAppModel(store: LocalMapStore(fileURL: url))
+        model.loadMarkdown("""
+        # Carte
+        ## A
+        ### A1
+        #### A1a
+        ## B
+        ### B1
+        """)
+
+        model.selectAndExpand(model.root.children[0].id)
+        model.selectAndExpand(model.root.children[0].children[0].id)
+        XCTAssertTrue(model.visibleRoot.flattened.contains { $0.title == "A1a" })
+
+        model.collapseLevels(2)
+
+        XCTAssertEqual(model.visibleRoot.children.map(\.title), ["A", "B"])
+        XCTAssertEqual(model.visibleRoot.children[0].children, [])
+        XCTAssertEqual(model.visibleRoot.children[1].children, [])
+    }
 }

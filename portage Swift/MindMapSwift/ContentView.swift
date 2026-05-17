@@ -9,6 +9,7 @@ struct ContentView: View {
     @State private var showingCreateMap = false
     @State private var showingImporter = false
     @State private var showingExporter = false
+    @State private var showingCollapseLevels = false
     @State private var nodeCreationRequest: NodeCreationRequest?
     @State private var renameRequest: RenameRequest?
 
@@ -53,9 +54,9 @@ struct ContentView: View {
                         }
 
                         Button {
-                            model.collapseOneLevel()
+                            showingCollapseLevels = true
                         } label: {
-                            Label("Replier un niveau", systemImage: "rectangle.compress.vertical")
+                            Label("Replier", systemImage: "rectangle.compress.vertical")
                         }
                     } label: {
                         Image(systemName: "slider.horizontal.3")
@@ -129,6 +130,21 @@ struct ContentView: View {
                 Button("OK", role: .cancel) { model.errorMessage = nil }
             } message: {
                 Text(model.errorMessage ?? "")
+            }
+            .confirmationDialog(
+                "Replier combien de niveaux ?",
+                isPresented: $showingCollapseLevels,
+                titleVisibility: .visible
+            ) {
+                ForEach(1...5, id: \.self) { levelCount in
+                    Button("\(levelCount) \(levelCount == 1 ? "niveau" : "niveaux")") {
+                        model.collapseLevels(levelCount)
+                    }
+                }
+
+                Button("Annuler", role: .cancel) {}
+            } message: {
+                Text("Choisissez le nombre de niveaux à refermer en une fois.")
             }
         }
         .preferredColorScheme(isNightMode ? .dark : .light)

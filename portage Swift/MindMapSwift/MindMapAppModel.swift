@@ -311,6 +311,13 @@ final class MindMapAppModel: ObservableObject {
         layoutMode = layoutMode == .radial ? .right : .radial
     }
 
+    func collapseLevels(_ count: Int) {
+        guard count > 0 else { return }
+        for _ in 0..<min(count, 5) {
+            collapseOneLevel()
+        }
+    }
+
     func collapseOneLevel() {
         let visibleNodes = visibleRoot.flattened
         let deepestVisibleDepth = visibleNodes.map(\.depth).max() ?? 0
