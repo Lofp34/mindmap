@@ -140,12 +140,20 @@ struct MindMapCanvasView: View {
     }
 
     private var zoomGesture: some Gesture {
-        MagnificationGesture()
+        MagnifyGesture()
             .onChanged { value in
-                scale = clamp(baseScale * value)
+                let nextScale = clamp(baseScale * value.magnification)
+                scale = nextScale
+                offset = anchoredOffset(
+                    anchor: value.startLocation,
+                    startScale: baseScale,
+                    nextScale: nextScale,
+                    startOffset: baseOffset
+                )
             }
             .onEnded { _ in
                 baseScale = scale
+                baseOffset = offset
             }
     }
 
@@ -194,6 +202,22 @@ struct MindMapCanvasView: View {
             height: center.y - contentCenter.y * newScale
         )
         baseOffset = offset
+    }
+
+    private func anchoredOffset(
+        anchor: CGPoint,
+        startScale: CGFloat,
+        nextScale: CGFloat,
+        startOffset: CGSize
+    ) -> CGSize {
+        let contentAnchor = CGPoint(
+            x: (anchor.x - startOffset.width) / max(startScale, 0.01),
+            y: (anchor.y - startOffset.height) / max(startScale, 0.01)
+        )
+        return CGSize(
+            width: anchor.x - contentAnchor.x * nextScale,
+            height: anchor.y - contentAnchor.y * nextScale
+        )
     }
 
     private func clamp(_ value: CGFloat) -> CGFloat {
