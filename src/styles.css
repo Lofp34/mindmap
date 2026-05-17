@@ -404,6 +404,14 @@ button.danger {
   gap: 0.65rem;
 }
 
+.node-title-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.node-title-actions button {
+  min-width: 0;
+}
+
 .canvas-card {
   display: grid;
   min-width: 0;

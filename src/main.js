@@ -98,6 +98,18 @@ app.innerHTML = `
         </div>
       </form>
     </dialog>
+    <dialog id="node-title-dialog" class="modal">
+      <form method="dialog" class="modal-panel node-title-panel">
+        <label id="node-title-label" for="node-title-input">Nom du nœud</label>
+        <input id="node-title-input" type="text" placeholder="Nouveau nœud" />
+        <div class="modal-actions node-title-actions">
+          <button id="cancel-node-title" type="button" class="ghost">Annuler</button>
+          <button id="confirm-node-title" type="button" class="primary">OK</button>
+          <button id="confirm-node-title-child" type="button">OK + enfant</button>
+          <button id="confirm-node-title-sibling" type="button">OK + frère</button>
+        </div>
+      </form>
+    </dialog>
     <div id="node-action-menu" class="node-action-menu" hidden>
       <button type="button" data-node-action="child">+ enfant</button>
       <button type="button" data-node-action="sibling">+ frère</button>
@@ -120,6 +132,13 @@ const createMapDialog = document.querySelector('#create-map-dialog');
 const createMapTitle = document.querySelector('#create-map-title');
 const cancelCreateMap = document.querySelector('#cancel-create-map');
 const confirmCreateMap = document.querySelector('#confirm-create-map');
+const nodeTitleDialog = document.querySelector('#node-title-dialog');
+const nodeTitleLabel = document.querySelector('#node-title-label');
+const nodeTitleInput = document.querySelector('#node-title-input');
+const cancelNodeTitle = document.querySelector('#cancel-node-title');
+const confirmNodeTitle = document.querySelector('#confirm-node-title');
+const confirmNodeTitleChild = document.querySelector('#confirm-node-title-child');
+const confirmNodeTitleSibling = document.querySelector('#confirm-node-title-sibling');
 const saveMapButton = document.querySelector('#save-map-button');
 const saveTemplateButton = document.querySelector('#save-template-button');
 const activeMapName = document.querySelector('#active-map-name');
@@ -250,6 +269,7 @@ let activeMapLabel = 'Exemple intégré';
 let activeTemplateEdit = null;
 let searchMatches = [];
 let activeSearchIndex = -1;
+let pendingNodeTitleDialog = null;
 
 renderButton.addEventListener('click', () => {
   loadMarkdown(markdownInput.value, activeMapLabel, { id: activeMapId, templateEdit: activeTemplateEdit });
@@ -277,6 +297,19 @@ confirmCreateMap.addEventListener('click', (event) => {
   const title = cleanTitle(createMapTitle.value) || 'Nouvelle carte';
   loadMarkdown(`# ${title}`, title);
   createMapDialog.close();
+});
+cancelNodeTitle.addEventListener('click', () => closeNodeTitleDialog(null));
+confirmNodeTitle.addEventListener('click', () => submitNodeTitleDialog(null));
+confirmNodeTitleChild.addEventListener('click', () => submitNodeTitleDialog('child'));
+confirmNodeTitleSibling.addEventListener('click', () => submitNodeTitleDialog('sibling'));
+nodeTitleInput.addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter' || event.isComposing) return;
+  event.preventDefault();
+  submitNodeTitleDialog(null);
+});
+nodeTitleDialog.addEventListener('cancel', (event) => {
+  event.preventDefault();
+  closeNodeTitleDialog(null);
 });
 saveMapButton.addEventListener('click', saveCurrentMap);
 saveTemplateButton.addEventListener('click', saveCurrentTemplate);
@@ -340,31 +373,60 @@ markdownInput.addEventListener('input', debounce(() => {
   render(currentLayout);
 }, 450));
 
-function addChildToSelectedNode() {
-  const parent = findNode(sourceTree, selectedNodeId);
-  if (!parent) return;
-  const title = requestNodeTitle();
-  if (!title) return;
-
-  const child = addChildNode(sourceTree, parent.id, title);
-  selectedNodeId = child.id;
-  expandedIds.add(parent.id);
-  syncMarkdownFromTree();
-  render(currentLayout);
+async function addChildToSelectedNode() {
+  await addNodeSequence('child', selectedNodeId);
 }
 
-function addSiblingToSelectedNode() {
-  const selected = findNode(sourceTree, selectedNodeId);
-  if (!selected || selected.depth === 0) return;
-  const title = requestNodeTitle();
-  if (!title) return;
+async function addSiblingToSelectedNode() {
+  await addNodeSequence('sibling', selectedNodeId);
+}
 
+async function addNodeSequence(initialAction, initialReferenceId) {
+  let action = initialAction;
+  let referenceId = initialReferenceId;
+
+  while (action && referenceId) {
+    const result = await requestNodeTitle(action);
+    if (!result?.title) return;
+
+    const addedNode = insertNode(action, referenceId, result.title);
+    if (!addedNode) return;
+
+    selectedNodeId = addedNode.id;
+    syncMarkdownFromTree();
+    render(currentLayout);
+
+    if (result.next === 'child') {
+      action = 'child';
+      referenceId = addedNode.id;
+      continue;
+    }
+
+    if (result.next === 'sibling' && addedNode.depth > 0) {
+      action = 'sibling';
+      referenceId = addedNode.id;
+      continue;
+    }
+
+    return;
+  }
+}
+
+function insertNode(action, referenceId, title) {
+  if (action === 'child') {
+    const parent = findNode(sourceTree, referenceId);
+    if (!parent) return null;
+    const child = addChildNode(sourceTree, parent.id, title);
+    expandedIds.add(parent.id);
+    return child;
+  }
+
+  const selected = findNode(sourceTree, referenceId);
+  if (!selected || selected.depth === 0) return null;
   const sibling = addSiblingNode(sourceTree, selected.id, title);
-  selectedNodeId = sibling.id;
-  const parent = findParent(sourceTree, sibling.id);
+  const parent = sibling ? findParent(sourceTree, sibling.id) : null;
   if (parent) expandedIds.add(parent.id);
-  syncMarkdownFromTree();
-  render(currentLayout);
+  return sibling;
 }
 
 function deleteSelectedNode() {
@@ -379,10 +441,31 @@ function deleteSelectedNode() {
   render(currentLayout);
 }
 
-function requestNodeTitle() {
-  const title = globalThis.prompt('Nom du nœud', '');
-  if (title === null) return null;
-  return cleanTitle(title);
+function requestNodeTitle(action) {
+  return new Promise((resolve) => {
+    pendingNodeTitleDialog = resolve;
+    nodeTitleLabel.textContent = action === 'sibling' ? 'Nom du nœud frère' : 'Nom du nœud enfant';
+    nodeTitleInput.value = '';
+    nodeTitleDialog.showModal();
+    nodeTitleInput.focus();
+  });
+}
+
+function submitNodeTitleDialog(next) {
+  const title = cleanTitle(nodeTitleInput.value);
+  if (!title) {
+    nodeTitleInput.focus();
+    return;
+  }
+
+  closeNodeTitleDialog({ title, next });
+}
+
+function closeNodeTitleDialog(result) {
+  const resolve = pendingNodeTitleDialog;
+  pendingNodeTitleDialog = null;
+  if (nodeTitleDialog.open) nodeTitleDialog.close();
+  if (resolve) resolve(result);
 }
 
 function renameSelectedNode() {
