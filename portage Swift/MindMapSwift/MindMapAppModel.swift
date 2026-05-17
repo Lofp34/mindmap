@@ -65,10 +65,14 @@ final class MindMapAppModel: ObservableObject {
             .map(\.id)
     }
 
-    var visibleLevelChoices: [Int] {
-        let deepestVisibleDepth = visibleRoot.flattened.map(\.depth).max() ?? 0
-        guard deepestVisibleDepth > 0 else { return [] }
-        return Array(1...deepestVisibleDepth)
+    var displayLevelChoices: [Int] {
+        let deepestAvailableDepth = root.flattened.map(\.depth).max() ?? 0
+        guard deepestAvailableDepth > 0 else { return [] }
+        return Array(1...deepestAvailableDepth)
+    }
+
+    var currentDisplayedLevel: Int {
+        visibleRoot.flattened.map(\.depth).max() ?? 0
     }
 
     func loadMarkdown(_ markdown: String, name: String? = nil, id: UUID? = nil) {

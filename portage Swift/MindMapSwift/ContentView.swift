@@ -58,7 +58,7 @@ struct ContentView: View {
                         } label: {
                             Label("Afficher les niveaux", systemImage: "rectangle.compress.vertical")
                         }
-                        .disabled(model.visibleLevelChoices.isEmpty)
+                        .disabled(model.displayLevelChoices.isEmpty)
                     } label: {
                         Image(systemName: "slider.horizontal.3")
                     }
@@ -137,9 +137,11 @@ struct ContentView: View {
                 isPresented: $showingCollapseLevels,
                 titleVisibility: .visible
             ) {
-                ForEach(model.visibleLevelChoices, id: \.self) { levelCount in
-                    Button("\(levelCount) \(levelCount == 1 ? "niveau" : "niveaux")") {
+                ForEach(model.displayLevelChoices, id: \.self) { levelCount in
+                    Button {
                         model.displayLevels(levelCount)
+                    } label: {
+                        levelButtonLabel(levelCount)
                     }
                 }
 
@@ -149,6 +151,19 @@ struct ContentView: View {
             }
         }
         .preferredColorScheme(isNightMode ? .dark : .light)
+    }
+
+    @ViewBuilder
+    private func levelButtonLabel(_ levelCount: Int) -> some View {
+        if model.currentDisplayedLevel == levelCount {
+            Label(levelTitle(levelCount), systemImage: "checkmark")
+        } else {
+            Text(levelTitle(levelCount))
+        }
+    }
+
+    private func levelTitle(_ levelCount: Int) -> String {
+        "\(levelCount) \(levelCount == 1 ? "niveau" : "niveaux")"
     }
 
     private func commitNodeCreation(

@@ -203,7 +203,7 @@ final class MindMapCoreTests: XCTestCase {
     }
 
     @MainActor
-    func testVisibleLevelChoicesMatchCurrentlyDisplayedDepth() {
+    func testDisplayLevelChoicesMatchAvailableMapDepth() {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension("json")
@@ -217,13 +217,21 @@ final class MindMapCoreTests: XCTestCase {
         ### B1
         """)
 
-        XCTAssertEqual(model.visibleLevelChoices, [1])
+        XCTAssertEqual(model.currentDisplayedLevel, 1)
+        XCTAssertEqual(model.displayLevelChoices, [1, 2, 3])
+
+        model.displayLevels(2)
+        XCTAssertEqual(model.visibleRoot.children[0].children.map(\.title), ["A1"])
+        XCTAssertEqual(model.visibleRoot.children[1].children.map(\.title), ["B1"])
+        XCTAssertEqual(model.currentDisplayedLevel, 2)
 
         model.selectAndExpand(model.root.children[0].id)
-        XCTAssertEqual(model.visibleLevelChoices, [1, 2])
+        XCTAssertEqual(model.currentDisplayedLevel, 2)
+        XCTAssertEqual(model.displayLevelChoices, [1, 2, 3])
 
         model.selectAndExpand(model.root.children[0].children[0].id)
-        XCTAssertEqual(model.visibleLevelChoices, [1, 2, 3])
+        XCTAssertEqual(model.currentDisplayedLevel, 3)
+        XCTAssertEqual(model.displayLevelChoices, [1, 2, 3])
     }
 
     @MainActor
