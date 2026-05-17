@@ -15,6 +15,7 @@ final class MindMapAppModel: ObservableObject {
     @Published var activeSearchIndex: Int = -1
     @Published var errorMessage: String?
     @Published var recenterRequestID = UUID()
+    @Published var cutNodeID: UUID?
 
     private let store: MapStoring
 
@@ -150,6 +151,44 @@ final class MindMapAppModel: ObservableObject {
         revealPath(to: nodeID)
     }
 
+    func selectAndToggle(_ nodeID: UUID) {
+        guard let node = root.node(id: nodeID) else { return }
+        selectedNodeID = nodeID
+
+        guard !node.children.isEmpty else {
+            revealAncestors(to: nodeID)
+            return
+        }
+
+        if nodeID == root.id {
+            if visibleDepthLimit == 0 {
+                visibleDepthLimit = 1
+            } else {
+                visibleDepthLimit = 0
+                expandedIDs.removeAll()
+            }
+            return
+        }
+
+        if expandedIDs.contains(nodeID) {
+            collapseNode(nodeID)
+        } else {
+            revealAncestors(to: nodeID)
+            expandedIDs.insert(nodeID)
+        }
+    }
+
+    func hasChildren(_ nodeID: UUID) -> Bool {
+        root.node(id: nodeID)?.children.isEmpty == false
+    }
+
+    func isExpanded(_ nodeID: UUID) -> Bool {
+        if nodeID == root.id {
+            return visibleDepthLimit > 0 || expandedIDs.contains(nodeID)
+        }
+        return expandedIDs.contains(nodeID)
+    }
+
     @discardableResult
     func addNode(action: NodeInsertAction, referenceID: UUID, title: String) -> MindMapNode? {
         let clean = title.trimmedOrUntitled
@@ -185,10 +224,58 @@ final class MindMapAppModel: ObservableObject {
     func deleteSelectedNode() {
         guard let selectedNodeID, selectedNodeID != root.id else { return }
         let parent = root.parent(of: selectedNodeID)
-        _ = root.remove(id: selectedNodeID)
+        let removed = root.remove(id: selectedNodeID)
         expandedIDs.remove(selectedNodeID)
+        if let cutNodeID, removed?.node(id: cutNodeID) != nil {
+            self.cutNodeID = nil
+        }
         self.selectedNodeID = parent?.id ?? root.id
         saveCurrentMap()
+    }
+
+    func cutNode(_ nodeID: UUID) {
+        guard nodeID != root.id, root.node(id: nodeID) != nil else { return }
+        cutNodeID = nodeID
+        selectedNodeID = nodeID
+    }
+
+    func cancelCutNode() {
+        cutNodeID = nil
+    }
+
+    func canPasteCutNode(on targetID: UUID) -> Bool {
+        guard let cutNodeID,
+              cutNodeID != root.id,
+              cutNodeID != targetID,
+              let cutNode = root.node(id: cutNodeID),
+              root.node(id: targetID) != nil else {
+            return false
+        }
+
+        return cutNode.node(id: targetID) == nil
+    }
+
+    @discardableResult
+    func pasteCutNode(on targetID: UUID) -> Bool {
+        guard let cutNodeID, canPasteCutNode(on: targetID),
+              let moved = root.moveSubtree(id: cutNodeID, to: targetID) else {
+            errorMessage = "Impossible de coller ce nœud ici."
+            return false
+        }
+
+        self.cutNodeID = nil
+        selectedNodeID = moved.id
+        expandedIDs.insert(targetID)
+        expandedIDs.insert(moved.id)
+        revealPath(to: moved.id)
+        activeMapName = root.title
+        saveCurrentMap()
+        return true
+    }
+
+    var cutNodeTitle: String? {
+        guard let cutNodeID else { return nil }
+        return root.node(id: cutNodeID)?.title
     }
 
     func focusSearchResult(offset: Int) -> UUID? {
@@ -264,6 +351,19 @@ final class MindMapAppModel: ObservableObject {
         guard let path = root.path(to: nodeID) else { return }
         expandedIDs.formUnion(path)
         visibleDepthLimit = max(visibleDepthLimit, min(1, root.node(id: nodeID)?.depth ?? 0))
+    }
+
+    private func revealAncestors(to nodeID: UUID) {
+        guard let path = root.path(to: nodeID) else { return }
+        expandedIDs.formUnion(path.dropLast())
+        if path.count > 1 {
+            visibleDepthLimit = max(visibleDepthLimit, 1)
+        }
+    }
+
+    private func collapseNode(_ nodeID: UUID) {
+        guard let node = root.node(id: nodeID) else { return }
+        expandedIDs.subtract(node.flattened.map(\.id))
     }
 
     private func trimExpandedIDs(maxDepth: Int) {

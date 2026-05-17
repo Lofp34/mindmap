@@ -37,6 +37,26 @@ final class MindMapCoreTests: XCTestCase {
         """)
     }
 
+    func testMoveSubtreeKeepsChildren() {
+        var root = MarkdownMindMapParser.parse("""
+        # Carte
+        ## A
+        ### A1
+        #### A1a
+        ## B
+        """)
+
+        let sourceID = root.children[0].id
+        let targetID = root.children[1].id
+        let moved = root.moveSubtree(id: sourceID, to: targetID)
+
+        XCTAssertEqual(moved?.title, "A")
+        XCTAssertEqual(root.children.map(\.title), ["B"])
+        XCTAssertEqual(root.children[0].children.map(\.title), ["A"])
+        XCTAssertEqual(root.children[0].children[0].children.map(\.title), ["A1"])
+        XCTAssertEqual(root.children[0].children[0].children[0].children.map(\.title), ["A1a"])
+    }
+
     func testVisibleTreeShowsOneExpandedBranch() {
         let root = MarkdownMindMapParser.parse("""
         # Carte
@@ -53,6 +73,27 @@ final class MindMapCoreTests: XCTestCase {
         XCTAssertEqual(visible.children.count, 2)
         XCTAssertEqual(visible.children[0].children.map(\.title), ["A1", "A2"])
         XCTAssertEqual(visible.children[1].children, [])
+    }
+
+    @MainActor
+    func testShortTapTogglesNodeOpenAndClosed() {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("json")
+        let model = MindMapAppModel(store: LocalMapStore(fileURL: url))
+        model.loadMarkdown("""
+        # Carte
+        ## A
+        ### A1
+        ## B
+        """)
+
+        let branchID = model.root.children[0].id
+        model.selectAndToggle(branchID)
+        XCTAssertEqual(model.visibleRoot.children[0].children.map(\.title), ["A1"])
+
+        model.selectAndToggle(branchID)
+        XCTAssertEqual(model.visibleRoot.children[0].children, [])
     }
 
     func testVisibleTreeCanShowOnlyCentralNode() {
@@ -106,6 +147,33 @@ final class MindMapCoreTests: XCTestCase {
         XCTAssertEqual(layout.nodes.count, 5)
         XCTAssertEqual(layout.links.count, 4)
         XCTAssertTrue(layout.nodes.allSatisfy { $0.size.width > 0 && $0.size.height > 0 })
+    }
+
+    @MainActor
+    func testCutPasteMovesNodeUnderTappedTarget() {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("json")
+        let model = MindMapAppModel(store: LocalMapStore(fileURL: url))
+        model.loadMarkdown("""
+        # Carte
+        ## A
+        ### A1
+        ## B
+        """)
+
+        let sourceID = model.root.children[0].id
+        let targetID = model.root.children[1].id
+
+        model.cutNode(sourceID)
+        XCTAssertTrue(model.canPasteCutNode(on: targetID))
+        XCTAssertFalse(model.canPasteCutNode(on: sourceID))
+        XCTAssertTrue(model.pasteCutNode(on: targetID))
+
+        XCTAssertNil(model.cutNodeID)
+        XCTAssertEqual(model.root.children.map(\.title), ["B"])
+        XCTAssertEqual(model.root.children[0].children.map(\.title), ["A"])
+        XCTAssertEqual(model.root.children[0].children[0].children.map(\.title), ["A1"])
     }
 
     @MainActor

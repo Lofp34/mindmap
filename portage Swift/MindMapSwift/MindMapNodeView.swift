@@ -5,18 +5,30 @@ struct MindMapNodeView: View {
     let node: LayoutNode
     let selected: Bool
     let searchHit: Bool
+    let hasChildren: Bool
+    let isExpanded: Bool
 
     var body: some View {
-        VStack(spacing: 2) {
-            ForEach(Array(MindMapLayoutEngine.wrappedLines(
-                for: node.title,
-                maxCharacters: node.isRoot ? 30 : 28
-            ).enumerated()), id: \.offset) { _, line in
-                Text(line)
-                    .font(node.isRoot ? .headline : .subheadline.weight(.semibold))
-                    .foregroundStyle(node.isRoot ? Color.rootText : Color.primaryText)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(1)
+        ZStack(alignment: .topTrailing) {
+            VStack(spacing: 2) {
+                ForEach(Array(MindMapLayoutEngine.wrappedLines(
+                    for: node.title,
+                    maxCharacters: node.isRoot ? 30 : 28
+                ).enumerated()), id: \.offset) { _, line in
+                    Text(line)
+                        .font(node.isRoot ? .headline : .subheadline.weight(.semibold))
+                        .foregroundStyle(node.isRoot ? Color.rootText : Color.primaryText)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(1)
+                }
+            }
+
+            if hasChildren {
+                Image(systemName: isExpanded ? "chevron.down.circle.fill" : "chevron.right.circle.fill")
+                    .font(.system(size: node.isRoot ? 19 : 16, weight: .semibold))
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(Color.accentTeal, Color.canvasBackground)
+                    .padding(node.isRoot ? 8 : 6)
             }
         }
         .padding(.horizontal, node.isRoot ? 18 : 14)

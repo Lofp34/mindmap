@@ -91,6 +91,38 @@ extension MindMapNode {
         return nil
     }
 
+    mutating func moveSubtree(id moveID: UUID, to newParentID: UUID) -> MindMapNode? {
+        guard moveID != id,
+              let movingNode = node(id: moveID),
+              movingNode.node(id: newParentID) == nil,
+              node(id: newParentID) != nil,
+              var removed = remove(id: moveID) else {
+            return nil
+        }
+
+        removed.normalizeDepths(depth: 0)
+        let inserted = appendExistingChild(removed, to: newParentID)
+        normalizeDepths()
+        return inserted
+    }
+
+    private mutating func appendExistingChild(_ child: MindMapNode, to parentID: UUID) -> MindMapNode? {
+        if id == parentID {
+            var copy = child
+            copy.normalizeDepths(depth: depth + 1)
+            children.append(copy)
+            return copy
+        }
+
+        for index in children.indices {
+            if let inserted = children[index].appendExistingChild(child, to: parentID) {
+                return inserted
+            }
+        }
+
+        return nil
+    }
+
     mutating func addSibling(after siblingID: UUID, title: String) -> MindMapNode? {
         for index in children.indices {
             if children[index].id == siblingID {

@@ -10,6 +10,7 @@ struct MindMapCanvasView: View {
     @State private var offset: CGSize = .zero
     @State private var baseOffset: CGSize = .zero
     @State private var didInitialFit = false
+    @State private var pasteTargetID: UUID?
 
     var body: some View {
         GeometryReader { proxy in
@@ -32,14 +33,32 @@ struct MindMapCanvasView: View {
                     MindMapNodeView(
                         node: node,
                         selected: model.selectedNodeID == node.id,
-                        searchHit: false
+                        searchHit: false,
+                        hasChildren: model.hasChildren(node.id),
+                        isExpanded: model.isExpanded(node.id)
                     )
                     .position(transform(node.position))
                     .onTapGesture {
-                        model.selectAndExpand(node.id)
+                        if model.cutNodeID != nil {
+                            if model.canPasteCutNode(on: node.id) {
+                                pasteTargetID = node.id
+                            } else {
+                                model.errorMessage = "Impossible de coller ce nœud ici."
+                            }
+                            return
+                        }
+
+                        model.selectAndToggle(node.id)
                         center(on: node.id, layout: layout, viewport: viewport)
                     }
                     .contextMenu {
+                        Button {
+                            model.cutNode(node.id)
+                        } label: {
+                            Label("Couper", systemImage: "scissors")
+                        }
+                        .disabled(node.isRoot)
+
                         Button {
                             nodeCreationRequest = NodeCreationRequest(action: .child, referenceID: node.id)
                         } label: {
@@ -86,8 +105,41 @@ struct MindMapCanvasView: View {
             .onChange(of: model.recenterRequestID) { _, _ in
                 center(on: model.root.id, layout: layout, viewport: viewport)
             }
+            .confirmationDialog(
+                pasteDialogTitle,
+                isPresented: pasteDialogBinding,
+                titleVisibility: .visible
+            ) {
+                Button("Coller ici") {
+                    if let pasteTargetID {
+                        _ = model.pasteCutNode(on: pasteTargetID)
+                    }
+                    pasteTargetID = nil
+                }
+
+                Button("Annuler", role: .cancel) {
+                    model.cancelCutNode()
+                    pasteTargetID = nil
+                }
+            } message: {
+                Text("Le nœud coupé et tous ses enfants seront déplacés sous cette bulle.")
+            }
         }
         .background(Color.appBackground.ignoresSafeArea())
+    }
+
+    private var pasteDialogBinding: Binding<Bool> {
+        Binding(
+            get: { pasteTargetID != nil },
+            set: { isPresented in
+                if !isPresented { pasteTargetID = nil }
+            }
+        )
+    }
+
+    private var pasteDialogTitle: String {
+        guard let title = model.cutNodeTitle else { return "Coller le nœud ?" }
+        return "Coller « \(title) » ici ?"
     }
 
     private var backgroundGrid: some View {
