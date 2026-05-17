@@ -53,13 +53,6 @@ struct MindMapCanvasView: View {
                     }
                     .contextMenu {
                         Button {
-                            model.cutNode(node.id)
-                        } label: {
-                            Label("Couper", systemImage: "scissors")
-                        }
-                        .disabled(node.isRoot)
-
-                        Button {
                             nodeCreationRequest = NodeCreationRequest(action: .child, referenceID: node.id)
                         } label: {
                             Label("Ajouter un enfant", systemImage: "plus")
@@ -77,6 +70,13 @@ struct MindMapCanvasView: View {
                         } label: {
                             Label("Renommer", systemImage: "pencil")
                         }
+
+                        Button {
+                            model.cutNode(node.id)
+                        } label: {
+                            Label("Couper", systemImage: "scissors")
+                        }
+                        .disabled(node.isRoot)
 
                         Button(role: .destructive) {
                             model.selectedNodeID = node.id

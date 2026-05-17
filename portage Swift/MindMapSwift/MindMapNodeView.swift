@@ -9,32 +9,27 @@ struct MindMapNodeView: View {
     let isExpanded: Bool
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            VStack(spacing: 2) {
-                ForEach(Array(MindMapLayoutEngine.wrappedLines(
-                    for: node.title,
-                    maxCharacters: node.isRoot ? 30 : 28
-                ).enumerated()), id: \.offset) { _, line in
-                    Text(line)
-                        .font(node.isRoot ? .headline : .subheadline.weight(.semibold))
-                        .foregroundStyle(node.isRoot ? Color.rootText : Color.primaryText)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(1)
-                }
-            }
-
-            if hasChildren {
-                Image(systemName: isExpanded ? "chevron.down.circle.fill" : "chevron.right.circle.fill")
-                    .font(.system(size: node.isRoot ? 19 : 16, weight: .semibold))
-                    .symbolRenderingMode(.palette)
-                    .foregroundStyle(Color.accentTeal, Color.canvasBackground)
-                    .padding(node.isRoot ? 8 : 6)
+        VStack(spacing: 2) {
+            ForEach(Array(MindMapLayoutEngine.wrappedLines(
+                for: node.title,
+                maxCharacters: node.isRoot ? 30 : 28
+            ).enumerated()), id: \.offset) { _, line in
+                Text(line)
+                    .font(node.isRoot ? .headline : .subheadline.weight(.semibold))
+                    .foregroundStyle(node.isRoot ? Color.rootText : Color.primaryText)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(1)
             }
         }
         .padding(.horizontal, node.isRoot ? 18 : 14)
         .frame(width: node.size.width, height: node.size.height)
         .background(background)
         .overlay(border)
+        .overlay(alignment: .topTrailing) {
+            if hasChildren {
+                childIndicator
+            }
+        }
         .shadow(color: Color.black.opacity(node.isRoot ? 0.22 : 0.14), radius: 12, x: 0, y: 8)
         .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .accessibilityElement(children: .combine)
@@ -68,6 +63,17 @@ struct MindMapNodeView: View {
         if selected { return .accentTeal }
         if node.depth == 1 { return .accentTeal.opacity(0.6) }
         return .nodeBorder
+    }
+
+    private var childIndicator: some View {
+        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+            .font(.system(size: node.isRoot ? 12 : 10, weight: .bold))
+            .foregroundStyle(Color.canvasBackground)
+            .frame(width: node.isRoot ? 22 : 19, height: node.isRoot ? 22 : 19)
+            .background(Color.accentTeal, in: Circle())
+            .overlay(Circle().stroke(Color.canvasBackground, lineWidth: 2))
+            .offset(x: node.isRoot ? 7 : 6, y: node.isRoot ? -7 : -6)
+            .accessibilityHidden(true)
     }
 }
 
